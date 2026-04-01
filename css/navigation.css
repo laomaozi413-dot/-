@@ -35,12 +35,24 @@
 }
 
 .back-cover-return-hint:has(.back-cover-return-hotspot:hover) .back-cover-return-butterfly,
-.settings-page-surface:has(.settings-return-hotspot:hover) .settings-return-butterfly {
+.settings-page-surface:has(.settings-return-hotspot:hover) .settings-return-butterfly,
+.settings-page-surface:has(.settings-next-hotspot:hover) .settings-next-butterfly {
   transform: scale(1.035);
   filter:
     drop-shadow(0 0 2px rgba(190, 248, 255, 0.95))
     drop-shadow(0 0 5px rgba(138, 235, 247, 0.55))
     drop-shadow(0 0 8px rgba(112, 220, 238, 0.28));
+}
+
+/* 设置页右下角下一页热区（覆盖在蝴蝶14上） */
+.settings-next-hotspot {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 120px;
+  height: 130px;
+  z-index: 10;
+  cursor: pointer;
 }
 
 /* 右下角翻页热区（不可见，覆盖在蝴蝶14上） */

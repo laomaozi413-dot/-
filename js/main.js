@@ -1,10 +1,10 @@
 (() => {
-  const diaryEntries = window.ButterflyDiaryData?.diaryEntries;
+  const butterflyDiaryData = window.ButterflyDiaryData;
   const createTextLayout = window.ButterflyDiaryPagination?.createTextLayout;
   const buildPage = window.ButterflyDiaryPageFactory?.buildPage;
   const createSettingsController = window.ButterflyDiarySettings?.createSettingsController;
 
-  if (!diaryEntries || !createTextLayout || !buildPage || !createSettingsController) {
+  if (!butterflyDiaryData || !createTextLayout || !buildPage || !createSettingsController) {
     console.error('[Butterfly Diary] 依赖模块未正确加载。');
     return;
   }
@@ -12,10 +12,15 @@
   const innerPagesHost = document.getElementById('innerPagesHost');
   const notebookFrontWrapper = document.getElementById('notebookFrontWrapper');
   const settingsPageWrapper = document.getElementById('settingsPageWrapper');
-  const settingsReturnHotspot = document.getElementById('settingsReturnHotspot');
+  const settingsPagesHost = document.getElementById('settingsPagesHost');
+  const settingsPageContent = document.getElementById('settingsPageContent');
+  const settingsMainChatContent = document.getElementById('settingsMainChatContent');
+  const settingsPresetContent = document.getElementById('settingsPresetContent');
+  const settingsWorldBookContent = document.getElementById('settingsWorldBookContent');
+  const settingsAutoTriggerContent = document.getElementById('settingsAutoTriggerContent');
   const coverSettingsTrigger = document.getElementById('coverSettingsTrigger');
 
-  if (!innerPagesHost || !notebookFrontWrapper || !settingsPageWrapper || !settingsReturnHotspot || !coverSettingsTrigger) {
+  if (!innerPagesHost || !notebookFrontWrapper || !settingsPageWrapper || !settingsPagesHost || !settingsPageContent || !settingsMainChatContent || !settingsPresetContent || !settingsWorldBookContent || !settingsAutoTriggerContent || !coverSettingsTrigger) {
     return;
   }
 
@@ -56,9 +61,60 @@
   const pageJumpConfirm = document.getElementById('pageJumpConfirm');
   let menuOpenPageIndex = -1;
 
+  const settingsPages = Array.from(settingsPagesHost.querySelectorAll('.settings-sheet')).map((wrapper, index) => ({
+    pageNumber: index + 1,
+    wrapper,
+    nextHotspot: wrapper.querySelector('.settings-next-hotspot'),
+    prevHotspot: wrapper.querySelector('.settings-return-hotspot'),
+  }));
+  let currentSettingsPageIndex = 0;
+
+  if (!settingsPages.length || settingsPages.some((page) => !page.nextHotspot || !page.prevHotspot)) {
+    console.error('[Butterfly Diary] 设置页结构未正确加载。');
+    return;
+  }
+
+  function getDiaryEntries() {
+    if (typeof butterflyDiaryData?.getDiaryEntries === 'function') {
+      return butterflyDiaryData.getDiaryEntries();
+    }
+    return Array.isArray(butterflyDiaryData?.diaryEntries) ? butterflyDiaryData.diaryEntries : [];
+  }
+
   function createPageText(pageNumber) {
     return pageContents[pageNumber - 1] || '';
   }
+
+  function rebuildDiaryPages(entriesSource = getDiaryEntries()) {
+    const nextEntries = Array.isArray(entriesSource) ? entriesSource : [];
+    pageContents = paginateEntries(nextEntries);
+    totalPageCount = pageContents.length;
+    backCoverPageIndex = totalPageCount;
+
+    for (let i = 0; i < totalPageCount; i++) {
+      const page = ensurePage(i);
+      if (page) {
+        page.wrapper.style.display = '';
+      }
+    }
+
+    pages.forEach((page, index) => {
+      const hasContentPage = index < totalPageCount;
+      page.wrapper.style.display = hasContentPage ? '' : 'none';
+      distributeText(page, hasContentPage ? createPageText(index + 1) : '');
+      normalizePage(page, 0);
+      if (!hasContentPage) {
+        page.wrapper.classList.remove('active', 'behind-page', 'flipped', 'unflipping', 'pre-return');
+      }
+    });
+
+    if (currentPageIndex > backCoverPageIndex) {
+      currentPageIndex = backCoverPageIndex;
+    }
+
+    refreshPageStates();
+  }
+
 
   function positionGlobalPageMenu(page) {
     if (!pageNavHost || !page || !page.menuTrigger) {
@@ -86,6 +142,11 @@
   const settingsController = createSettingsController({
     settingsPageWrapper,
     notebookFrontWrapper,
+    settingsPageContent,
+    settingsMainChatContent,
+    settingsPresetContent,
+    settingsWorldBookContent,
+    settingsAutoTriggerContent,
     closeGlobalPageMenu,
     animationDuration,
     getCurrentView: () => currentView,
@@ -93,6 +154,140 @@
       currentView = view;
     },
     isAnimatingRef: animationState,
+  });
+
+  function resetSettingsPages() {
+    currentSettingsPageIndex = 0;
+    settingsPages.forEach((page, index) => {
+      page.wrapper.classList.remove('flipped', 'pre-return', 'unflipping', 'active', 'behind-page');
+      page.wrapper.style.zIndex = '';
+      page.wrapper.classList.toggle('is-first', index === 0);
+      page.wrapper.classList.toggle('is-last', index === settingsPages.length - 1);
+    });
+  }
+
+  function refreshSettingsPageStates() {
+    settingsPages.forEach((page, index) => {
+      const isSettingsActive = currentView === 'settings' && index === currentSettingsPageIndex;
+      page.wrapper.classList.toggle('active', isSettingsActive);
+      page.wrapper.classList.toggle('behind-page', currentView === 'settings' && index > currentSettingsPageIndex);
+      page.wrapper.style.zIndex = String(70 + (settingsPages.length - index));
+    });
+  }
+
+  function showSettingsSection() {
+    if (animationState.value || currentView !== 'cover') {
+      return;
+    }
+
+    resetSettingsPages();
+    settingsController.refresh();
+
+    if (settingsController.showSettingsPage()) {
+      refreshPageStates();
+      refreshSettingsPageStates();
+    }
+  }
+
+  function hideSettingsToCover() {
+    if (animationState.value || currentView !== 'settings') {
+      return;
+    }
+
+    if (!settingsController.hideSettingsPage()) {
+      return;
+    }
+
+    refreshPageStates();
+    refreshSettingsPageStates();
+
+    window.setTimeout(() => {
+      resetSettingsPages();
+      settingsController.refresh();
+      refreshSettingsPageStates();
+    }, animationDuration);
+  }
+
+  function flipSettingsForward() {
+    if (animationState.value || currentView !== 'settings' || currentSettingsPageIndex >= settingsPages.length - 1) {
+      return;
+    }
+
+    const currentSettingsPage = settingsPages[currentSettingsPageIndex];
+    if (!currentSettingsPage) {
+      return;
+    }
+
+    animationState.value = true;
+    currentSettingsPage.wrapper.classList.add('flipped');
+    currentSettingsPage.wrapper.classList.remove('active');
+    currentSettingsPageIndex += 1;
+    refreshSettingsPageStates();
+
+    window.setTimeout(() => {
+      animationState.value = false;
+    }, animationDuration);
+  }
+
+  function flipSettingsBackward() {
+    if (animationState.value || currentView !== 'settings') {
+      return;
+    }
+
+    if (currentSettingsPageIndex === 0) {
+      hideSettingsToCover();
+      return;
+    }
+
+    const targetIndex = currentSettingsPageIndex - 1;
+    const targetPage = settingsPages[targetIndex];
+    if (!targetPage) {
+      return;
+    }
+
+    animationState.value = true;
+    targetPage.wrapper.classList.add('pre-return', 'unflipping');
+    targetPage.wrapper.classList.remove('active');
+    targetPage.wrapper.style.zIndex = String(900 + targetIndex);
+
+    currentSettingsPageIndex = targetIndex;
+    refreshSettingsPageStates();
+    targetPage.wrapper.classList.add('pre-return', 'unflipping');
+    targetPage.wrapper.style.zIndex = String(900 + targetIndex);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        targetPage.wrapper.classList.remove('pre-return');
+        targetPage.wrapper.classList.remove('flipped');
+      });
+    });
+
+    window.setTimeout(() => {
+      targetPage.wrapper.classList.remove('unflipping');
+      targetPage.wrapper.style.zIndex = '';
+      refreshSettingsPageStates();
+      animationState.value = false;
+    }, animationDuration);
+  }
+
+  settingsPages.forEach((page) => {
+    page.prevHotspot.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const handledBySettingsSubview = settingsController.handleTopRightReturn?.(currentSettingsPageIndex) === true;
+      if (handledBySettingsSubview) {
+        return;
+      }
+      if (currentSettingsPageIndex === 0) {
+        hideSettingsToCover();
+        return;
+      }
+      flipSettingsBackward();
+    });
+
+    page.nextHotspot.addEventListener('click', (event) => {
+      event.stopPropagation();
+      flipSettingsForward();
+    });
   });
 
   function renderJumpMenu(page) {
@@ -266,6 +461,14 @@
 
   function refreshPageStates() {
     pages.forEach((page, index) => {
+      const hasContentPage = index < totalPageCount;
+      page.wrapper.style.display = hasContentPage ? '' : 'none';
+      if (!hasContentPage) {
+        page.wrapper.classList.remove('active', 'behind-page');
+        page.wrapper.style.zIndex = String(100 + (pages.length - index));
+        return;
+      }
+
       const isDiaryActive = currentView === 'diary' && currentPageIndex < totalPageCount && index === currentPageIndex;
       page.wrapper.classList.toggle('active', isDiaryActive);
       page.wrapper.classList.toggle('behind-page', currentView === 'diary' && index > currentPageIndex && currentPageIndex < totalPageCount);
@@ -286,6 +489,7 @@
     currentView = 'diary';
     notebookFrontWrapper.classList.add('open');
     refreshPageStates();
+    refreshSettingsPageStates();
   }
 
   function flipForward() {
@@ -322,6 +526,8 @@
     currentView = 'cover';
     animationState.value = true;
     notebookFrontWrapper.classList.add('pre-return');
+    refreshPageStates();
+    refreshSettingsPageStates();
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -417,13 +623,19 @@
     });
   }
 
-  pageContents = paginateEntries(diaryEntries);
-  totalPageCount = pageContents.length;
-  backCoverPageIndex = totalPageCount;
+  rebuildDiaryPages();
 
-  for (let i = 0; i < totalPageCount; i++) {
-    ensurePage(i);
-  }
+  window.addEventListener('butterflyDiary:entriesChanged', (event) => {
+    rebuildDiaryPages(event?.detail?.entries || getDiaryEntries());
+  });
+
+  Promise.resolve(butterflyDiaryData.loadDiaryEntriesFromChatVariable?.())
+    .catch((error) => {
+      console.warn(`[Butterfly Diary] 读取聊天变量「${String(butterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal')}」失败，已回退为默认日记。`, error);
+    });
+
+  resetSettingsPages();
+  settingsController.refresh();
 
   notebookFrontWrapper.addEventListener('click', () => {
     openDiaryFromCover();
@@ -431,12 +643,7 @@
 
   coverSettingsTrigger.addEventListener('click', (event) => {
     event.stopPropagation();
-    settingsController.showSettingsPage();
-  });
-
-  settingsReturnHotspot.addEventListener('click', (event) => {
-    event.stopPropagation();
-    settingsController.hideSettingsPage();
+    showSettingsSection();
   });
 
   if (backCoverReturnHotspot) {
@@ -449,4 +656,5 @@
   }
 
   refreshPageStates();
+  refreshSettingsPageStates();
 })();

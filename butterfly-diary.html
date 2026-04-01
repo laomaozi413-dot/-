@@ -16,16 +16,77 @@
 
     <!-- 内页宿主：页数由文本量自动计算，翻完后显示下封皮 -->
     <div class="inner-pages-host" id="innerPagesHost"></div>
+
+    <!-- 设置区宿主：共 5 页，第一页承载 API 配置，第二页承载主聊天功能，第三页承载单预设，第四页承载世界书功能，第五页承载自动触发功能 -->
     <div class="settings-page-wrapper" id="settingsPageWrapper">
-      <div class="notebook-inner-page-back"></div>
-      <div class="notebook-inner-page settings-page-surface">
-        <div class="settings-return-hotspot" id="settingsReturnHotspot" title="返回封皮"></div>
-        <div class="butterfly-container inner-page-butterflies">
-          <img class="butterfly settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+      <div class="settings-pages-host" id="settingsPagesHost">
+        <div class="notebook-inner-page-wrapper settings-sheet is-first" data-settings-page-number="1">
+          <div class="notebook-inner-page-back"></div>
+          <div class="notebook-inner-page settings-page-surface">
+            <div class="settings-return-hotspot" title="返回封皮"></div>
+            <div class="settings-next-hotspot" title="前往下一页"></div>
+            <div class="butterfly-container inner-page-butterflies">
+              <img class="butterfly butterfly-turn-prev settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+              <img class="butterfly butterfly-turn-next settings-next-butterfly" src="assets/butterfly14.png" style="left: 263px; top: 399px; width: 118px; height: 123px;" alt="">
+            </div>
+            <div class="settings-page-content" id="settingsPageContent"></div>
+          </div>
         </div>
-        <div class="settings-page-content" id="settingsPageContent"></div>
+
+        <div class="notebook-inner-page-wrapper settings-sheet" data-settings-page-number="2">
+          <div class="notebook-inner-page-back"></div>
+          <div class="notebook-inner-page settings-page-surface">
+            <div class="settings-return-hotspot" title="翻回上一页"></div>
+            <div class="settings-next-hotspot" title="前往下一页"></div>
+            <div class="butterfly-container inner-page-butterflies">
+              <img class="butterfly butterfly-turn-prev settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+              <img class="butterfly butterfly-turn-next settings-next-butterfly" src="assets/butterfly14.png" style="left: 263px; top: 399px; width: 118px; height: 123px;" alt="">
+            </div>
+            <div class="settings-page-content" id="settingsMainChatContent"></div>
+          </div>
+        </div>
+
+        <div class="notebook-inner-page-wrapper settings-sheet" data-settings-page-number="3">
+          <div class="notebook-inner-page-back"></div>
+          <div class="notebook-inner-page settings-page-surface">
+            <div class="settings-return-hotspot" title="翻回上一页"></div>
+            <div class="settings-next-hotspot" title="前往下一页"></div>
+            <div class="butterfly-container inner-page-butterflies">
+              <img class="butterfly butterfly-turn-prev settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+              <img class="butterfly butterfly-turn-next settings-next-butterfly" src="assets/butterfly14.png" style="left: 263px; top: 399px; width: 118px; height: 123px;" alt="">
+            </div>
+            <div class="settings-page-content" id="settingsPresetContent"></div>
+          </div>
+        </div>
+
+        <div class="notebook-inner-page-wrapper settings-sheet" data-settings-page-number="4">
+          <div class="notebook-inner-page-back"></div>
+          <div class="notebook-inner-page settings-page-surface">
+            <div class="settings-return-hotspot" title="翻回上一页"></div>
+            <div class="settings-next-hotspot" title="前往下一页"></div>
+            <div class="butterfly-container inner-page-butterflies">
+              <img class="butterfly butterfly-turn-prev settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+              <img class="butterfly butterfly-turn-next settings-next-butterfly" src="assets/butterfly14.png" style="left: 263px; top: 399px; width: 118px; height: 123px;" alt="">
+            </div>
+            <div class="settings-page-content" id="settingsWorldBookContent"></div>
+          </div>
+        </div>
+
+        <div class="notebook-inner-page-wrapper settings-sheet is-last" data-settings-page-number="5">
+          <div class="notebook-inner-page-back"></div>
+          <div class="notebook-inner-page settings-page-surface">
+            <div class="settings-return-hotspot" title="翻回上一页"></div>
+            <div class="settings-next-hotspot" title="已到最后一页"></div>
+            <div class="butterfly-container inner-page-butterflies">
+              <img class="butterfly butterfly-turn-prev settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+              <img class="butterfly butterfly-turn-next settings-next-butterfly" src="assets/butterfly14.png" style="left: 263px; top: 399px; width: 118px; height: 123px;" alt="">
+            </div>
+            <div class="settings-page-content" id="settingsAutoTriggerContent"></div>
+          </div>
+        </div>
       </div>
     </div>
+
     <div class="back-cover-return-hint" id="backCoverReturnHint">
       <img class="back-cover-return-butterfly" src="assets/butterfly16.png" alt="">
       <div class="back-cover-return-hotspot" id="backCoverReturnHotspot" title="从下封皮翻回上一页"></div>

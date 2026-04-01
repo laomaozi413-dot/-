@@ -1,5 +1,8 @@
-window.ButterflyDiaryData = {
-  diaryEntries: [
+window.ButterflyDiaryData = (() => {
+  const DIARY_VARIABLE_NAME = 'butterfly_journal';
+  const LEGACY_DIARY_VARIABLE_NAMES = ['日记'];
+
+  const defaultDiaryEntries = [
     {
       title: '第一则校园日记',
       content: '今天是周一，早上升旗的时候阳光特别亮，照得操场像铺了一层金色的薄纱。第一节是语文课，老师讲《背影》，读到父亲翻越月台那一段时，教室里突然安静下来，我也想起爸爸每天早起送我上学的样子。课间我和同桌去小卖部买了牛奶面包，回来的路上看见花坛边停着一只白色的小蝴蝶，扑闪扑闪地绕着灌木飞，像在偷偷听我们讲话。',
@@ -40,5 +43,540 @@ window.ButterflyDiaryData = {
       title: '第十则校园日记',
       content: '最近在听一首老歌，旋律非常舒缓，今天一整天都在脑海里单曲循环。中午吃完饭，和同桌在操场看了一会儿学长们打篮球。后来我们聊起了以后的梦想，她说想当个插画师，我说我还没想好，但希望能做一件让自己觉得开心和有意义的事。其实未来到底什么样谁也不知道，但只要每天都比昨天更好一点点，总会走到想去的地方吧。',
     },
-  ],
-};
+  ];
+
+  function padNumber(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function createGeneratedDiaryTitle(date = new Date()) {
+    const year = date.getFullYear();
+    const month = padNumber(date.getMonth() + 1);
+    const day = padNumber(date.getDate());
+    const hours = padNumber(date.getHours());
+    const minutes = padNumber(date.getMinutes());
+    return `最新日记 ${year}-${month}-${day} ${hours}:${minutes}`;
+  }
+
+  function createGeneratedDiaryDateValue(date = new Date()) {
+    const year = date.getFullYear();
+    const month = padNumber(date.getMonth() + 1);
+    const day = padNumber(date.getDate());
+    return `${year}-${month}-${day}`;
+  }
+
+  function pickFirstNonEmptyString(values = []) {
+    const matchedValue = (Array.isArray(values) ? values : []).find((value) => typeof value === 'string' && value.trim());
+    return matchedValue ? matchedValue.trim() : '';
+  }
+
+  function hasStructuredDiaryFields(entry) {
+    if (!entry || typeof entry !== 'object') return false;
+    return [
+      '日期',
+      '天气',
+      '心情',
+      '配图文本',
+      '日记内容',
+      'date',
+      'weather',
+      'mood',
+      'imageText',
+      'image_text',
+      'imagePrompt',
+      'image_prompt',
+      'diaryContent',
+      'diary_content',
+      'diaryText',
+    ].some((key) => typeof entry?.[key] === 'string' && entry[key].trim());
+  }
+
+  function normalizeStructuredDiaryPayloadEntry(entry, index = 0) {
+    if (!entry || typeof entry !== 'object' || !hasStructuredDiaryFields(entry)) {
+      return null;
+    }
+
+    const normalizedEntry = {
+      日期: pickFirstNonEmptyString([entry['日期'], entry.date, entry.day, entry.createdAt]) || createGeneratedDiaryDateValue(),
+      天气: pickFirstNonEmptyString([entry['天气'], entry.weather, entry.climate]),
+      心情: pickFirstNonEmptyString([entry['心情'], entry.mood, entry.feeling, entry.emotion]),
+      配图文本: pickFirstNonEmptyString([entry['配图文本'], entry.imageText, entry.image_text, entry.imagePrompt, entry.image_prompt, entry.caption]),
+      日记内容: pickFirstNonEmptyString([entry['日记内容'], entry.diaryContent, entry.diary_content, entry.diaryText, entry.content, entry.text, entry.message, entry.body]),
+    };
+
+    const hasMeaningfulBody = [normalizedEntry.天气, normalizedEntry.心情, normalizedEntry.配图文本, normalizedEntry.日记内容]
+      .some((value) => String(value || '').trim());
+    if (!hasMeaningfulBody) {
+      return null;
+    }
+
+    return normalizedEntry;
+  }
+
+  function createDisplayDiaryEntryFromStructuredPayload(entry, index = 0, { fallbackTitlePrefix = '日记' } = {}) {
+    const structuredPayload = normalizeStructuredDiaryPayloadEntry(entry, index);
+    if (!structuredPayload) return null;
+
+    return {
+      title: pickFirstNonEmptyString([entry?.title, entry?.name, entry?.heading, structuredPayload['日期']])
+        || (index === 0 && fallbackTitlePrefix === '最新日记' ? createGeneratedDiaryTitle() : `${fallbackTitlePrefix} ${index + 1}`),
+      content: [
+        `天气：${structuredPayload['天气']}`,
+        `心情：${structuredPayload['心情']}`,
+        `配图文本：${structuredPayload['配图文本']}`,
+        `日记内容：${structuredPayload['日记内容']}`,
+      ].join('\n'),
+      structuredData: structuredPayload,
+    };
+  }
+
+  function convertDiaryEntryToStructuredPayload(entry, index = 0) {
+    const structuredPayload = normalizeStructuredDiaryPayloadEntry(entry, index)
+      || normalizeStructuredDiaryPayloadEntry(entry?.structuredData, index);
+    if (structuredPayload) {
+      return structuredPayload;
+    }
+
+    if (typeof entry === 'string') {
+      const normalizedText = entry.trim();
+      if (!normalizedText) return null;
+      return {
+        日期: createGeneratedDiaryDateValue(),
+        天气: '',
+        心情: '',
+        配图文本: '',
+        日记内容: normalizedText,
+      };
+    }
+
+    if (!entry || typeof entry !== 'object') {
+      return null;
+    }
+
+    const title = pickFirstNonEmptyString([entry.title, entry.name, entry.heading]);
+    const content = pickFirstNonEmptyString([entry.content, entry.text, entry.message, entry.body]);
+    if (!title && !content) {
+      return null;
+    }
+
+    return {
+      日期: /^\d{4}-\d{2}-\d{2}/.test(title) ? title : createGeneratedDiaryDateValue(),
+      天气: '',
+      心情: '',
+      配图文本: '',
+      日记内容: content || title,
+    };
+  }
+
+  function normalizeStructuredDiaryPayloadEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .map((entry, index) => convertDiaryEntryToStructuredPayload(entry, index))
+      .filter(Boolean)
+      .slice(0, 200);
+  }
+
+  function serializeStructuredDiaryPayloadEntries(entries) {
+    return JSON.stringify(normalizeStructuredDiaryPayloadEntries(entries), null, 2);
+  }
+
+  function normalizeGeneratedDiaryJsonValue(rawValue) {
+    let nextValue = rawValue;
+    if (typeof nextValue === 'string') {
+      const normalizedText = unwrapCodeFence(nextValue);
+      if (!normalizedText) return null;
+      try {
+        nextValue = JSON.parse(normalizedText);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    const sourceEntries = Array.isArray(nextValue)
+      ? nextValue
+      : (Array.isArray(nextValue?.entries)
+        ? nextValue.entries
+        : (nextValue && typeof nextValue === 'object' ? [nextValue] : []));
+
+    const entries = sourceEntries
+      .map((entry, index) => normalizeStructuredDiaryPayloadEntry(entry, index))
+      .filter(Boolean)
+      .slice(0, 200);
+
+    if (!entries.length) {
+      return null;
+    }
+
+    return {
+      entries,
+      rawValue: JSON.stringify(entries, null, 2),
+    };
+  }
+
+  function unwrapCodeFence(text = '') {
+    const normalizedText = String(text || '').trim();
+    const matched = normalizedText.match(/^```(?:json|txt|text|markdown)?\s*([\s\S]*?)\s*```$/i);
+    return matched ? String(matched[1] || '').trim() : normalizedText;
+  }
+
+  function normalizeDiaryEntry(entry, index = 0, { fallbackTitlePrefix = '日记' } = {}) {
+    if (typeof entry === 'string') {
+      const content = entry.trim();
+      if (!content) return null;
+      return {
+        title: index === 0 && fallbackTitlePrefix === '最新日记' ? createGeneratedDiaryTitle() : `${fallbackTitlePrefix} ${index + 1}`,
+        content,
+      };
+    }
+
+    if (!entry || typeof entry !== 'object') {
+      return null;
+    }
+
+    const structuredDiaryEntry = createDisplayDiaryEntryFromStructuredPayload(entry, index, { fallbackTitlePrefix });
+    if (structuredDiaryEntry) {
+      return structuredDiaryEntry;
+    }
+
+    const title = pickFirstNonEmptyString([entry.title, entry.name, entry.date, entry.heading]);
+    const content = pickFirstNonEmptyString([entry.content, entry.text, entry.message, entry.body]);
+
+    if (!title && !content) {
+      return null;
+    }
+
+    return {
+      title: title || (index === 0 && fallbackTitlePrefix === '最新日记' ? createGeneratedDiaryTitle() : `${fallbackTitlePrefix} ${index + 1}`),
+      content,
+    };
+  }
+
+  function normalizeDiaryEntries(entries, options = {}) {
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .map((entry, index) => normalizeDiaryEntry(entry, index, options))
+      .filter(Boolean)
+      .slice(0, 200);
+  }
+
+  function diaryEntriesToText(entriesSource = runtimeDiaryEntries) {
+    const entries = normalizeDiaryEntries(entriesSource, { fallbackTitlePrefix: '日记' });
+    return entries
+      .map((entry) => `${String(entry.title || '').trim()}：${String(entry.content || '').trim()}`.trim())
+      .filter(Boolean)
+      .join('\n\n')
+      .trim();
+  }
+
+  function parseDiaryBlocksFromTaggedText(rawText = '') {
+    const normalizedText = unwrapCodeFence(rawText);
+    if (!normalizedText) return [];
+
+    const regex = /(?:^|\n{2,})(?:标题|title)\s*[:：]\s*(.+?)\n(?:内容|content)\s*[:：]\s*([\s\S]*?)(?=(?:\n{2,}(?:标题|title)\s*[:：])|$)/gi;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(normalizedText)) !== null) {
+      matches.push({
+        title: String(match[1] || '').trim(),
+        content: String(match[2] || '').trim(),
+      });
+    }
+    return normalizeDiaryEntries(matches, { fallbackTitlePrefix: '日记' });
+  }
+
+  function parseDiaryVariableValue(rawValue) {
+    if (Array.isArray(rawValue)) {
+      return normalizeDiaryEntries(rawValue, { fallbackTitlePrefix: '日记' });
+    }
+
+    if (rawValue && typeof rawValue === 'object') {
+      if (Array.isArray(rawValue.entries)) {
+        return normalizeDiaryEntries(rawValue.entries, { fallbackTitlePrefix: '日记' });
+      }
+      const singleEntry = normalizeDiaryEntry(rawValue, 0, { fallbackTitlePrefix: '日记' });
+      return singleEntry ? [singleEntry] : [];
+    }
+
+    const normalizedText = unwrapCodeFence(typeof rawValue === 'string' ? rawValue : String(rawValue ?? ''));
+    if (!normalizedText) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(normalizedText);
+      const parsedEntries = parseDiaryVariableValue(parsed);
+      if (parsedEntries.length) {
+        return parsedEntries;
+      }
+    } catch (error) {}
+
+    const taggedEntries = parseDiaryBlocksFromTaggedText(normalizedText);
+    if (taggedEntries.length) {
+      return taggedEntries;
+    }
+
+    return normalizeDiaryEntries([
+      {
+        title: createGeneratedDiaryTitle(),
+        content: normalizedText,
+      },
+    ], { fallbackTitlePrefix: '最新日记' });
+  }
+
+  function getSTAPI() {
+    try {
+      if (window.ST_API) return window.ST_API;
+    } catch (error) {}
+    try {
+      if (window.parent && window.parent !== window && window.parent.ST_API) return window.parent.ST_API;
+    } catch (error) {}
+    try {
+      if (window.top && window.top !== window && window.top.ST_API) return window.top.ST_API;
+    } catch (error) {}
+    return null;
+  }
+
+  function getSillyTavernContext() {
+    try {
+      if (window.SillyTavern?.getContext) return window.SillyTavern.getContext();
+    } catch (error) {}
+    try {
+      if (window.parent && window.parent !== window && window.parent.SillyTavern?.getContext) return window.parent.SillyTavern.getContext();
+    } catch (error) {}
+    try {
+      if (window.top && window.top !== window && window.top.SillyTavern?.getContext) return window.top.SillyTavern.getContext();
+    } catch (error) {}
+    return null;
+  }
+
+  function getCurrentChatId() {
+    const ctx = getSillyTavernContext();
+    if (typeof ctx?.getCurrentChatId === 'function') {
+      return String(ctx.getCurrentChatId() || '').trim();
+    }
+    return String(ctx?.chatId || '').trim();
+  }
+
+  let runtimeDiaryEntries = normalizeDiaryEntries(defaultDiaryEntries, { fallbackTitlePrefix: '校园日记' });
+  let runtimeDiaryRawValue = '';
+  let runtimeDiarySource = 'default';
+
+  function getDiaryEntries() {
+    return runtimeDiaryEntries.slice();
+  }
+
+  function getDiaryRawValue() {
+    return String(runtimeDiaryRawValue || '').trim() || diaryEntriesToText(runtimeDiaryEntries);
+  }
+
+  function getDiaryTextForPrompt() {
+    const rawValue = String(runtimeDiaryRawValue || '').trim();
+    if (!rawValue) {
+      return diaryEntriesToText(runtimeDiaryEntries);
+    }
+
+    const normalizedRawValue = unwrapCodeFence(rawValue);
+    if (/^[\[{]/.test(normalizedRawValue) || /(?:^|\n)(?:标题|title)\s*[:：]/i.test(normalizedRawValue)) {
+      return diaryEntriesToText(runtimeDiaryEntries);
+    }
+
+    return normalizedRawValue;
+  }
+
+  function dispatchDiaryEntriesChanged() {
+    try {
+      window.dispatchEvent(new CustomEvent('butterflyDiary:entriesChanged', {
+        detail: {
+          entries: getDiaryEntries(),
+          rawValue: getDiaryRawValue(),
+          source: runtimeDiarySource,
+        },
+      }));
+    } catch (error) {}
+  }
+
+  function setRuntimeDiaryEntries(entries, { rawValue = '', source = 'runtime', dispatch = true } = {}) {
+    runtimeDiaryEntries = normalizeDiaryEntries(entries, { fallbackTitlePrefix: '日记' });
+    runtimeDiaryRawValue = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+    runtimeDiarySource = String(source || 'runtime').trim() || 'runtime';
+
+    api.diaryEntries = getDiaryEntries();
+    api.rawDiaryValue = runtimeDiaryRawValue;
+    api.source = runtimeDiarySource;
+
+    if (dispatch) {
+      dispatchDiaryEntriesChanged();
+    }
+
+    return getDiaryEntries();
+  }
+
+  async function tryLoadDiaryVariableValue(stApi, variableName) {
+    try {
+      const result = await stApi.variables.get({
+        name: variableName,
+        scope: 'local',
+      });
+      const rawValue = result?.value;
+      const serializedRawValue = typeof rawValue === 'string'
+        ? rawValue
+        : (rawValue == null ? '' : JSON.stringify(rawValue, null, 2));
+      const parsedEntries = parseDiaryVariableValue(rawValue);
+      if (!serializedRawValue && !parsedEntries.length) {
+        return null;
+      }
+      return {
+        variableName,
+        rawValue,
+        serializedRawValue,
+        parsedEntries,
+      };
+    } catch (error) {
+      console.warn(`[Butterfly Diary] 读取聊天变量「${variableName}」失败`, error);
+      return null;
+    }
+  }
+
+  async function loadDiaryEntriesFromChatVariable({ expectedChatId = '' } = {}) {
+    const stApi = getSTAPI();
+    const currentChatId = getCurrentChatId();
+    if (!currentChatId || (expectedChatId && currentChatId !== expectedChatId) || typeof stApi?.variables?.get !== 'function') {
+      setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+      return {
+        ok: false,
+        persisted: false,
+        entries: getDiaryEntries(),
+        rawValue: getDiaryRawValue(),
+        source: runtimeDiarySource,
+      };
+    }
+
+    const variableNames = [DIARY_VARIABLE_NAME, ...LEGACY_DIARY_VARIABLE_NAMES];
+    for (const variableName of variableNames) {
+      const loadedValue = await tryLoadDiaryVariableValue(stApi, variableName);
+      if (!loadedValue) {
+        continue;
+      }
+
+      if (loadedValue.parsedEntries.length) {
+        setRuntimeDiaryEntries(loadedValue.parsedEntries, {
+          rawValue: loadedValue.serializedRawValue,
+          source: variableName === DIARY_VARIABLE_NAME ? 'chat_variable' : 'legacy_chat_variable',
+          dispatch: true,
+        });
+      } else {
+        setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+      }
+
+      return {
+        ok: true,
+        persisted: variableName === DIARY_VARIABLE_NAME,
+        variableName,
+        entries: getDiaryEntries(),
+        rawValue: getDiaryRawValue(),
+        source: runtimeDiarySource,
+      };
+    }
+
+    setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+    return {
+      ok: true,
+      persisted: false,
+      entries: getDiaryEntries(),
+      rawValue: getDiaryRawValue(),
+      source: runtimeDiarySource,
+    };
+  }
+
+  async function saveDiaryValueToChatVariable(rawValue, { expectedChatId = '', source = 'chat_variable', mergeMode = 'replace' } = {}) {
+    const serializedRawValue = typeof rawValue === 'string'
+      ? rawValue
+      : JSON.stringify(rawValue ?? '', null, 2);
+    const parsedEntries = parseDiaryVariableValue(serializedRawValue);
+    const nextEntries = parsedEntries.length
+      ? parsedEntries
+      : normalizeDiaryEntries([
+        {
+          title: createGeneratedDiaryTitle(),
+          content: String(serializedRawValue || '').trim(),
+        },
+      ], { fallbackTitlePrefix: '最新日记' });
+
+    const normalizedMergeMode = String(mergeMode || '').trim() === 'append' ? 'append' : 'replace';
+    const incomingStructuredEntries = normalizeStructuredDiaryPayloadEntries(nextEntries);
+    const baseStructuredEntries = normalizedMergeMode === 'append'
+      ? normalizeStructuredDiaryPayloadEntries(runtimeDiaryEntries)
+      : [];
+    const finalStructuredEntries = normalizedMergeMode === 'append'
+      ? baseStructuredEntries.concat(incomingStructuredEntries).slice(-200)
+      : (incomingStructuredEntries.length ? incomingStructuredEntries : normalizeStructuredDiaryPayloadEntries(nextEntries));
+    const finalRawValue = finalStructuredEntries.length
+      ? serializeStructuredDiaryPayloadEntries(finalStructuredEntries)
+      : serializedRawValue;
+    const finalEntries = normalizeDiaryEntries(finalStructuredEntries.length ? finalStructuredEntries : nextEntries, { fallbackTitlePrefix: '日记' });
+
+    let persisted = false;
+    const stApi = getSTAPI();
+    const currentChatId = getCurrentChatId();
+    if (currentChatId && (!expectedChatId || currentChatId === expectedChatId) && typeof stApi?.variables?.set === 'function') {
+      try {
+        const result = await stApi.variables.set({
+          name: DIARY_VARIABLE_NAME,
+          scope: 'local',
+          value: finalRawValue,
+        });
+        persisted = result?.ok !== false;
+
+        if (persisted && typeof stApi?.variables?.delete === 'function') {
+          for (const legacyVariableName of LEGACY_DIARY_VARIABLE_NAMES) {
+            try {
+              await stApi.variables.delete({
+                name: legacyVariableName,
+                scope: 'local',
+              });
+            } catch (error) {}
+          }
+        }
+      } catch (error) {
+        console.warn(`[Butterfly Diary] 写入聊天变量「${DIARY_VARIABLE_NAME}」失败`, error);
+      }
+    }
+
+    setRuntimeDiaryEntries(finalEntries, {
+      rawValue: finalRawValue,
+      source: persisted ? source : `${source}_runtime`,
+      dispatch: true,
+    });
+
+    return {
+      ok: true,
+      persisted,
+      entries: getDiaryEntries(),
+      rawValue: getDiaryRawValue(),
+      source: runtimeDiarySource,
+      mergeMode: normalizedMergeMode,
+    };
+  }
+
+  const api = {
+    DIARY_VARIABLE_NAME,
+    LEGACY_DIARY_VARIABLE_NAMES,
+    normalizeGeneratedDiaryJsonValue,
+    normalizeStructuredDiaryPayloadEntries,
+    serializeStructuredDiaryPayloadEntries,
+    defaultDiaryEntries: normalizeDiaryEntries(defaultDiaryEntries, { fallbackTitlePrefix: '校园日记' }),
+    diaryEntries: getDiaryEntries(),
+    rawDiaryValue: runtimeDiaryRawValue,
+    source: runtimeDiarySource,
+    getDiaryEntries,
+    getDiaryRawValue,
+    getDiaryTextForPrompt,
+    diaryEntriesToText,
+    normalizeDiaryEntries,
+    parseDiaryVariableValue,
+    loadDiaryEntriesFromChatVariable,
+    saveDiaryValueToChatVariable,
+  };
+
+  return api;
+})();
