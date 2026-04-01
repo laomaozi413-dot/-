@@ -1,0 +1,40 @@
+.settings-page-wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.settings-page-wrapper.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-page-surface {
+  background-image: none;
+}
+
+.settings-page-content {
+  position: absolute;
+  left: 30px;
+  top: 40px;
+  width: 336px;
+  height: 468px;
+  z-index: 7;
+}
+
+.settings-return-hotspot {
+  position: absolute;
+  right: 14px;
+  top: 30px;
+  width: 52px;
+  height: 54px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.cover-settings-trigger {
+  cursor: pointer;
+}

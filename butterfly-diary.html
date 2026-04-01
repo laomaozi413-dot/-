@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Butterfly Diary</title>
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/settings.css" />
+  <link rel="stylesheet" href="./css/navigation.css" />
+  <link rel="stylesheet" href="./css/notebook.css" />
+</head>
+<body>
+  <div class="notebook-container">
+    <!-- 最底层的封底与阴影 -->
+    <div class="notebook-back"></div>
+
+    <!-- 内页宿主：页数由文本量自动计算，翻完后显示下封皮 -->
+    <div class="inner-pages-host" id="innerPagesHost"></div>
+    <div class="settings-page-wrapper" id="settingsPageWrapper">
+      <div class="notebook-inner-page-back"></div>
+      <div class="notebook-inner-page settings-page-surface">
+        <div class="settings-return-hotspot" id="settingsReturnHotspot" title="返回封皮"></div>
+        <div class="butterfly-container inner-page-butterflies">
+          <img class="butterfly settings-return-butterfly" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
+        </div>
+        <div class="settings-page-content" id="settingsPageContent"></div>
+      </div>
+    </div>
+    <div class="back-cover-return-hint" id="backCoverReturnHint">
+      <img class="back-cover-return-butterfly" src="assets/butterfly16.png" alt="">
+      <div class="back-cover-return-hotspot" id="backCoverReturnHotspot" title="从下封皮翻回上一页"></div>
+    </div>
+    <div class="page-nav-host" id="pageNavHost">
+      <div class="page-jump-container">
+        <div class="page-jump-menu" id="pageJumpMenu"></div>
+        <div class="page-jump-custom-btn" id="pageJumpCustomBtn" title="跳转到指定页">⋯</div>
+      </div>
+      <div class="page-jump-input-wrapper" id="pageJumpInputWrapper">
+        <input type="number" class="page-jump-input" id="pageJumpInput" min="1" placeholder="页">
+        <button class="page-jump-confirm" id="pageJumpConfirm">GO</button>
+      </div>
+    </div>
+
+    <!-- 静止不动的打孔底座：这是下封皮上的真洞，翻开上封皮后，这个洞依旧留在这里 -->
+    <!-- 把 binding 里的 hole 挪到了这里，作为背景存在 -->
+    <div class="binding" style="z-index: 2;">
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+      <div class="ring-group"><div class="hole"></div></div>
+    </div>
+
+    <!-- === 上封皮整体翻页容器 === -->
+    <div class="notebook-front-wrapper" id="notebookFrontWrapper">
+      <!-- 上封皮的背面（翻开后看到的纸背面） -->
+      <div class="notebook-front-back"></div>
+
+      <!-- 上封皮本体 (正面，带有透明洞) -->
+      <div class="notebook-front">
+        <div class="butterfly-container">
+          <img class="butterfly cover-settings-trigger" id="coverSettingsTrigger" src="assets/butterfly01.png" style="left: 4px; top: 32px; width: 122px; height: 199px;" alt="进入设置区" title="进入设置区">
+          <img class="butterfly" src="assets/butterfly02.png" style="left: 200px; top: 54px; width: 38px; height: 36px;" alt="">
+          <img class="butterfly" src="assets/butterfly03.png" style="left: 293px; top: 55px; width: 41px; height: 60px;" alt="">
+          <img class="butterfly" src="assets/butterfly04.png" style="left: 244px; top: 119px; width: 42px; height: 42px;" alt="">
+          <img class="butterfly" src="assets/butterfly05.png" style="left: 125px; top: 151px; width: 111px; height: 98px;" alt="">
+          <img class="butterfly" src="assets/butterfly06.png" style="left: 261px; top: 199px; width: 85px; height: 93px;" alt="">
+          <img class="butterfly" src="assets/butterfly07.png" style="left: 374px; top: 155px; width: 21px; height: 37px;" alt="">
+          <img class="butterfly" src="assets/butterfly08.png" style="left: 19px; top: 298px; width: 58px; height: 54px;" alt="">
+          <img class="butterfly" src="assets/butterfly09.png" style="left: 120px; top: 301px; width: 91px; height: 103px;" alt="">
+          <img class="butterfly" src="assets/butterfly10.png" style="left: 250px; top: 307px; width: 60px; height: 59px;" alt="">
+          <img class="butterfly" src="assets/butterfly11.png" style="left: 274px; top: 388px; width: 107px; height: 68px;" alt="">
+          <img class="butterfly" src="assets/butterfly12.png" style="left: 35px; top: 421px; width: 80px; height: 85px;" alt="">
+          <img class="butterfly" src="assets/butterfly13.png" style="left: 184px; top: 454px; width: 73px; height: 77px;" alt="">
+        </div>
+      </div>
+    </div>
+
+    <!-- === 静止不动的顶层金属铁丝 === -->
+    <div class="binding" style="z-index: 10;">
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+      <div class="ring-group"><div class="wires"><div class="wire"></div><div class="wire"></div></div></div>
+    </div>
+  </div>
+
+  <script src="./js/data.js"></script>
+  <script src="./js/pagination.js"></script>
+  <script src="./js/pageFactory.js"></script>
+  <script src="./js/settings.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+</html>

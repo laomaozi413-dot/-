@@ -1,0 +1,366 @@
+/* 翻开后的内容页 (也就是原来下封皮上面的一层) */
+/* ========= 内页整体翻页容器 ========= */
+.inner-pages-host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  transform-style: preserve-3d;
+}
+
+.notebook-inner-page-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center top;
+  transition: transform 0.8s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s ease 0.5s;
+  transform-style: preserve-3d;
+  opacity: 1;
+}
+
+.notebook-inner-page-wrapper.flipped {
+  transform: rotateX(160deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notebook-inner-page-wrapper.active {
+  pointer-events: auto;
+}
+
+.notebook-inner-page-wrapper:not(.active) {
+  pointer-events: none;
+}
+
+.notebook-inner-page-wrapper.unflipping {
+  pointer-events: none;
+}
+
+/* 回翻前先让上一页以“已翻开”的姿态浮现出来 */
+.notebook-inner-page-wrapper.pre-return {
+  transform: rotateX(160deg);
+  opacity: 1;
+  pointer-events: none;
+  transition: none;
+}
+
+.notebook-inner-page-wrapper.behind-page {
+  transform: translateY(1px);
+}
+
+.notebook-inner-page-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--page-bg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 24px;
+  box-sizing: border-box;
+  transform: rotateX(180deg);
+  backface-visibility: hidden;
+}
+
+.notebook-inner-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--page-bg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  backface-visibility: hidden;
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 25px,
+    var(--line-color) 25px,
+    var(--line-color) 26px
+  );
+  background-size: calc(100% - 60px) 468px;
+  background-position: center 40px;
+  background-repeat: no-repeat;
+  box-shadow: inset -2px -2px 5px rgba(0, 0, 0, 0.05), inset 2px 2px 5px rgba(255, 255, 255, 0.5);
+  -webkit-mask-image:
+    radial-gradient(circle at 33px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 63px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 93px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 123px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 153px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 183px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 213px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 243px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 273px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 303px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 333px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 363px 16px, transparent 8px, black 8.5px);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    radial-gradient(circle at 33px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 63px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 93px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 123px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 153px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 183px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 213px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 243px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 273px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 303px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 333px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 363px 16px, transparent 8px, black 8.5px);
+  mask-composite: intersect;
+}
+
+.notebook-inner-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: inset -7px -7px 0 rgba(105, 136, 146, 0.18);
+  mix-blend-mode: multiply;
+}
+
+@supports (-webkit-mask-composite: destination-out) {
+  .notebook-inner-page {
+    -webkit-mask-image:
+      radial-gradient(circle at 33px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 63px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 93px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 123px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 153px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 183px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 213px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 243px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 273px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 303px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 333px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 363px 16px, black 8px, transparent 8.5px),
+      linear-gradient(black, black);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+  }
+}
+
+/* 上封皮整体作为一个独立的翻页容器 */
+.notebook-front-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  transform-origin: center top;
+  transition: transform 0.8s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s ease 0.5s;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.notebook-front-wrapper.open {
+  transform: rotateX(160deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notebook-front-wrapper.pre-return {
+  transform: rotateX(160deg);
+  opacity: 1;
+  pointer-events: none;
+  transition: none;
+}
+
+/* 上封皮本体 (也就是带有蓝色背景和蝴蝶的层) */
+.notebook-front {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 15%),
+    var(--main-bg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 24px;
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  -webkit-mask-image:
+    radial-gradient(circle at 33px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 63px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 93px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 123px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 153px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 183px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 213px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 243px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 273px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 303px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 333px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 363px 16px, transparent 8px, black 8.5px);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    radial-gradient(circle at 33px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 63px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 93px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 123px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 153px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 183px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 213px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 243px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 273px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 303px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 333px 16px, transparent 8px, black 8.5px),
+    radial-gradient(circle at 363px 16px, transparent 8px, black 8.5px);
+  mask-composite: intersect;
+}
+
+@supports (-webkit-mask-composite: destination-out) {
+  .notebook-front {
+    -webkit-mask-image:
+      radial-gradient(circle at 33px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 63px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 93px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 123px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 153px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 183px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 213px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 243px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 273px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 303px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 333px 16px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 363px 16px, black 8px, transparent 8.5px),
+      linear-gradient(black, black);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+  }
+}
+
+/* 上封皮蝴蝶悬停效果，使用各异的浅色滤镜光晕。越小的蝴蝶放大幅度越大。 */
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(1):hover { filter: drop-shadow(0 0 10px rgba(255, 150, 150, 0.9)); transform: scale(1.02); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(2):hover { filter: drop-shadow(0 0 10px rgba(150, 255, 150, 0.9)); transform: scale(1.15); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(3):hover { filter: drop-shadow(0 0 10px rgba(150, 150, 255, 0.9)); transform: scale(1.12); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(4):hover { filter: drop-shadow(0 0 10px rgba(255, 255, 150, 0.9)); transform: scale(1.15); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(5):hover { filter: drop-shadow(0 0 10px rgba(255, 180, 150, 0.9)); transform: scale(1.04); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(6):hover { filter: drop-shadow(0 0 10px rgba(200, 150, 255, 0.9)); transform: scale(1.05); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(7):hover { filter: drop-shadow(0 0 10px rgba(150, 255, 255, 0.9)); transform: scale(1.20); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(8):hover { filter: drop-shadow(0 0 10px rgba(255, 150, 200, 0.9)); transform: scale(1.08); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(9):hover { filter: drop-shadow(0 0 10px rgba(180, 255, 180, 0.9)); transform: scale(1.04); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(10):hover { filter: drop-shadow(0 0 10px rgba(150, 210, 255, 0.9)); transform: scale(1.08); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(11):hover { filter: drop-shadow(0 0 10px rgba(255, 180, 180, 0.9)); transform: scale(1.04); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(12):hover { filter: drop-shadow(0 0 10px rgba(220, 255, 150, 0.9)); transform: scale(1.05); }
+.butterfly-container:not(.inner-page-butterflies) .butterfly:nth-child(13):hover { filter: drop-shadow(0 0 10px rgba(255, 150, 255, 0.9)); transform: scale(1.06); }
+
+/* 伪元素做的暗边阴影 */
+.notebook-front::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 22px;
+  box-shadow: inset -6px -6px 0 rgba(58, 102, 128, 0.2);
+  pointer-events: none;
+  z-index: 10;
+  mix-blend-mode: multiply;
+}
+
+/* 封皮背面（翻开后看到的页面） */
+.notebook-front-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #f1f5f8;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 24px;
+  box-sizing: border-box;
+  transform: rotateX(180deg);
+  backface-visibility: hidden;
+}
+
+@supports (-webkit-mask-composite: destination-out) {
+  .notebook-front-back {
+    -webkit-mask-image:
+      radial-gradient(circle at 33px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 63px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 93px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 123px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 153px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 183px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 213px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 243px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 273px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 303px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 333px 522px, black 8px, transparent 8.5px),
+      radial-gradient(circle at 363px 522px, black 8px, transparent 8.5px),
+      linear-gradient(black, black);
+    -webkit-mask-composite: destination-out;
+  }
+}
+
+/* 顶部的线圈和底座孔孔 */
+.binding {
+  position: absolute;
+  top: -18px;
+  left: 25px;
+  right: 25px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ring-group {
+  position: relative;
+  width: 16px;
+  height: 44px;
+}
+
+.hole {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: 16px;
+  height: 16px;
+  background-color: var(--page-bg);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 50%;
+  box-sizing: border-box;
+  z-index: 1;
+  box-shadow:
+    inset 0 5px 4px -2px rgba(45, 65, 80, 0.65),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.wires {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: 10px;
+  height: 36px;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+}
+
+.wire {
+  width: 4px;
+  height: 100%;
+  background:
+    linear-gradient(180deg, rgba(80, 100, 115, 0.45) 0%, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0) 70%, rgba(80, 100, 115, 0.55) 100%),
+    linear-gradient(90deg, #c7d6e0 0%, #ffffff 40%, #9cb2c2 80%, #7d94a6 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  box-sizing: border-box;
+  box-shadow: 2px 0 3px rgba(45, 65, 80, 0.35);
+}
