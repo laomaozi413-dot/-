@@ -90,14 +90,21 @@ window.ButterflyDiarySettings = {
         .slice(0, 20);
     }
 
+    function normalizeAiPresetInfoRole(role = 'system') {
+      const normalizedRole = typeof role === 'string' ? role.trim() : '';
+      return ['system', 'user', 'assistant'].includes(normalizedRole) ? normalizedRole : 'system';
+    }
+
     function normalizeAiPresetBlock(block, index = 0) {
       const rawRole = typeof block?.role === 'string' ? block.role.trim() : '';
-      const role = ['system', 'user', 'assistant', '_context'].includes(rawRole) ? rawRole : 'user';
+      const role = ['system', 'user', 'assistant', '_context', '_info'].includes(rawRole) ? rawRole : 'user';
       return {
         id: typeof block?.id === 'string' && block.id.trim() ? block.id.trim() : `ai_preset_block_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`,
         role,
         name: typeof block?.name === 'string' ? block.name.trim().slice(0, 32) : '',
-        text: role === '_context' ? '' : String(block?.text || ''),
+        text: ['_context', '_info'].includes(role) ? '' : String(block?.text || ''),
+        infoSourceId: role === '_info' && typeof block?.infoSourceId === 'string' ? block.infoSourceId.trim() : '',
+        infoRole: role === '_info' ? normalizeAiPresetInfoRole(block?.infoRole) : '',
       };
     }
 
@@ -178,6 +185,12 @@ window.ButterflyDiarySettings = {
         journalAutoTriggerInterval: clampAiIntegerSetting(nextSettings.journalAutoTriggerInterval, 1, 99, '1'),
         journalAutoTriggerWriteMode: ['append', 'replace'].includes(String(nextSettings.journalAutoTriggerWriteMode || '').trim())
           ? String(nextSettings.journalAutoTriggerWriteMode).trim()
+          : 'append',
+        manualGenerateLatestMode: ['latest_only', 'latest_and_history'].includes(String(nextSettings.manualGenerateLatestMode || '').trim())
+          ? String(nextSettings.manualGenerateLatestMode).trim()
+          : 'latest_only',
+        manualGenerateHistoryMode: ['append', 'replace'].includes(String(nextSettings.manualGenerateHistoryMode || '').trim())
+          ? String(nextSettings.manualGenerateHistoryMode).trim()
           : 'append',
       };
     }
@@ -316,6 +329,7 @@ window.ButterflyDiarySettings = {
     function getAiPresetBlockDisplayName(block, index = 0) {
       const role = String(block?.role || '').trim();
       if (role === '_context') return '主聊天';
+      if (role === '_info') return block?.name || '信息块';
       if (block?.name) return block.name;
       return `消息块 ${index + 1}`;
     }
@@ -326,6 +340,7 @@ window.ButterflyDiarySettings = {
       if (role === 'assistant') return 'assistant';
       if (role === 'user') return 'user';
       if (role === '_context') return '上下文槽';
+      if (role === '_info') return `信息块 · ${normalizeAiPresetInfoRole(block?.infoRole)}`;
       return '';
     }
 
@@ -369,6 +384,9 @@ window.ButterflyDiarySettings = {
     let aiPresetPreviewStatus = '';
     let aiPresetPreviewReturnView = 'list';
     let aiPresetGenerating = false;
+    let aiPresetImportExportText = '';
+    let pendingAiPresetInfoRole = 'system';
+    let aiPresetInfoSourcePickerTargetIndex = -1;
 
 
     let pendingWorldBookEntries = [];
@@ -396,6 +414,8 @@ window.ButterflyDiarySettings = {
     let pendingJournalAutoTriggerRole = 'assistant';
     let pendingJournalAutoTriggerInterval = '1';
     let pendingJournalAutoTriggerWriteMode = 'append';
+    let pendingManualGenerateLatestMode = 'latest_only';
+    let pendingManualGenerateHistoryMode = 'append';
 
     function loadSettings() {
       try {
@@ -454,6 +474,8 @@ window.ButterflyDiarySettings = {
       pendingJournalAutoTriggerRole = nextSettings.journalAutoTriggerRole === 'user' ? 'user' : 'assistant';
       pendingJournalAutoTriggerInterval = String(nextSettings.journalAutoTriggerInterval || '1');
       pendingJournalAutoTriggerWriteMode = nextSettings.journalAutoTriggerWriteMode === 'replace' ? 'replace' : 'append';
+      pendingManualGenerateLatestMode = nextSettings.manualGenerateLatestMode === 'latest_and_history' ? 'latest_and_history' : 'latest_only';
+      pendingManualGenerateHistoryMode = nextSettings.manualGenerateHistoryMode === 'replace' ? 'replace' : 'append';
     }
 
 
@@ -527,6 +549,14 @@ window.ButterflyDiarySettings = {
       return String(mode || '').trim() === 'replace' ? '覆盖变量' : '追加到变量';
     }
 
+    function getManualGenerateLatestModeLabel(mode = 'latest_only') {
+      return String(mode || '').trim() === 'latest_and_history' ? '最新+历史' : '仅最新';
+    }
+
+    function getManualGenerateHistoryModeLabel(mode = 'append') {
+      return String(mode || '').trim() === 'replace' ? '覆盖历史' : '追加历史';
+    }
+
     function getJournalAutoTriggerSummaryLabel(settingsSource = aiSettings) {
       const settings = normalizeAiSettings(settingsSource);
       if (!settings.journalAutoTriggerEnabled) return '关闭';
@@ -581,8 +611,10 @@ window.ButterflyDiarySettings = {
         journalAutoTriggerRole: pendingJournalAutoTriggerRole === 'user' ? 'user' : 'assistant',
         journalAutoTriggerInterval: nextInterval,
         journalAutoTriggerWriteMode: pendingJournalAutoTriggerWriteMode === 'replace' ? 'replace' : 'append',
+        manualGenerateLatestMode: pendingManualGenerateLatestMode === 'latest_and_history' ? 'latest_and_history' : 'latest_only',
+        manualGenerateHistoryMode: pendingManualGenerateHistoryMode === 'replace' ? 'replace' : 'append',
       });
-      journalAutoTriggerStatusMessage = '已保存自动触发';
+      journalAutoTriggerStatusMessage = '已保存自动触发与手动生成策略';
       renderAutoTriggerContent();
       return aiSettings;
     }
@@ -658,6 +690,57 @@ window.ButterflyDiarySettings = {
       setPendingAiPresetSettings(aiSettings);
       persistAiSettings();
       return aiSettings;
+    }
+
+    function exportAiPresetPayload() {
+      return {
+        type: 'butterfly-diary-preset',
+        version: 1,
+        presetBlocks: normalizeAiPresetBlocks(pendingAiPresetBlocks),
+      };
+    }
+
+    function openAiPresetImportExport() {
+      aiPresetImportExportText = JSON.stringify(exportAiPresetPayload(), null, 2);
+      aiPresetStatusMessage = '';
+      aiPresetSubView = 'importExport';
+      renderAiPresetContent();
+    }
+
+    function closeAiPresetImportExport() {
+      aiPresetSubView = 'list';
+      renderAiPresetContent();
+    }
+
+    function importAiPresetFromText(rawText = '') {
+      const normalizedText = String(rawText || '').trim();
+      if (!normalizedText) {
+        aiPresetStatusMessage = '导入失败(内容为空)';
+        renderAiPresetContent();
+        return false;
+      }
+
+      try {
+        const parsed = JSON.parse(normalizedText);
+        const sourceBlocks = Array.isArray(parsed)
+          ? parsed
+          : (Array.isArray(parsed?.presetBlocks) ? parsed.presetBlocks : []);
+        const normalizedBlocks = normalizeAiPresetBlocks(sourceBlocks);
+        if (!normalizedBlocks.length) {
+          throw new Error('无可导入块');
+        }
+        pendingAiPresetBlocks = normalizedBlocks;
+        selectedAiPresetBlockIndex = 0;
+        aiPresetStatusMessage = `已导入 ${normalizedBlocks.length} 块`;
+        aiPresetSubView = 'list';
+        renderAiPresetContent();
+        return true;
+      } catch (error) {
+        aiPresetStatusMessage = '导入失败(JSON无效)';
+        console.error('[Butterfly Diary][预设] 导入失败', error);
+        renderAiPresetContent();
+        return false;
+      }
     }
 
     function saveWorldBookEntries(entries = pendingWorldBookEntries) {
@@ -964,6 +1047,105 @@ window.ButterflyDiarySettings = {
       return normalizeAiPresetBlock({ role }, pendingAiPresetBlocks.length);
     }
 
+    function getAiPresetInfoSources() {
+      return [
+        {
+          id: 'diary_latest_entries',
+          name: '最新的日记内容',
+          subtitle: `读取最新变量 ${String(window.ButterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal_latest')} 的日记正文`,
+        },
+        {
+          id: 'diary_history_summary',
+          name: '历史日记的总结部分',
+          subtitle: `读取历史变量 ${String(window.ButterflyDiaryData?.DIARY_HISTORY_VARIABLE_NAME || 'butterfly_journal_history')} 的 summary / <diary_summary>`,
+        },
+        {
+          id: 'world_book_triggered',
+          name: '世界块',
+          subtitle: '读取当前已配置世界书的触发结果预览',
+        },
+      ];
+    }
+
+    async function getAiPresetInfoSourceText(sourceId = '') {
+      const normalizedSourceId = String(sourceId || '').trim();
+      if (!normalizedSourceId) return '';
+
+      if (normalizedSourceId === 'diary_latest_entries') {
+        const stApi = getSTAPI();
+        if (typeof stApi?.variables?.get === 'function') {
+          try {
+            const result = await stApi.variables.get({
+              name: String(window.ButterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal_latest'),
+              scope: 'local',
+            });
+            const rawValue = result?.value;
+            if (typeof window.ButterflyDiaryData?.parseDiaryVariableValue === 'function') {
+              const entries = window.ButterflyDiaryData.parseDiaryVariableValue(rawValue);
+              const latestText = entries
+                .map((entry) => {
+                  const title = String(entry?.title || '').trim();
+                  const content = String(entry?.content || '').trim();
+                  return [title, content].filter(Boolean).join('：');
+                })
+                .filter(Boolean)
+                .join('\n\n');
+              if (latestText) {
+                return latestText;
+              }
+            }
+          } catch (error) {
+            console.warn('[Butterfly Diary][预设信息块] 读取最新日记内容失败', error);
+          }
+        }
+
+        const diarySource = typeof window.ButterflyDiaryData?.getDiaryEntries === 'function'
+          ? window.ButterflyDiaryData.getDiaryEntries()
+          : (Array.isArray(window.ButterflyDiaryData?.diaryEntries) ? window.ButterflyDiaryData.diaryEntries : []);
+        return diarySource
+          .map((entry) => {
+            const title = String(entry?.title || '').trim();
+            const content = String(entry?.content || '').trim();
+            return [title, content].filter(Boolean).join('：');
+          })
+          .filter(Boolean)
+          .join('\n\n');
+      }
+
+      if (normalizedSourceId === 'diary_history_summary') {
+        const stApi = getSTAPI();
+        if (typeof stApi?.variables?.get === 'function') {
+          try {
+            const result = await stApi.variables.get({
+              name: String(window.ButterflyDiaryData?.DIARY_HISTORY_VARIABLE_NAME || 'butterfly_journal_history'),
+              scope: 'local',
+            });
+            const rawValue = result?.value;
+            const parsedObject = typeof rawValue === 'string'
+              ? JSON.parse(rawValue)
+              : rawValue;
+            const directSummary = String(parsedObject?.summary || '').trim();
+            if (directSummary) {
+              return directSummary;
+            }
+          } catch (error) {
+            console.warn('[Butterfly Diary][预设信息块] 读取历史日记总结失败', error);
+          }
+        }
+
+        return typeof window.ButterflyDiaryData?.getDiarySummary === 'function'
+          ? window.ButterflyDiaryData.getDiarySummary()
+          : '';
+      }
+
+      if (normalizedSourceId === 'world_book_triggered') {
+        const entry = getEditingWorldBookEntry() || getWorldBookEntries()[0] || null;
+        return entry ? await buildWorldBookTriggeredPreviewMessage(entry) : '';
+      }
+
+      return '';
+    }
+
     function selectAiPresetBlock(index) {
       if (!pendingAiPresetBlocks.length) {
         selectedAiPresetBlockIndex = -1;
@@ -1033,6 +1215,44 @@ window.ButterflyDiarySettings = {
       renderAiPresetContent();
     }
 
+    function addAiPresetInfoBlock(sourceId = '', sourceName = '', infoRole = pendingAiPresetInfoRole) {
+      const sources = getAiPresetInfoSources();
+      const matchedSource = sources.find((source) => String(source?.id || '').trim() === String(sourceId || '').trim()) || null;
+      const source = matchedSource || sources[0] || null;
+      if (!source) return false;
+      pendingAiPresetBlocks = [
+        ...normalizeAiPresetBlocks(pendingAiPresetBlocks),
+        normalizeAiPresetBlock({
+          role: '_info',
+          name: String(sourceName || source.name || '信息块').trim() || '信息块',
+          infoSourceId: String(sourceId || source.id || '').trim(),
+          infoRole: normalizeAiPresetInfoRole(infoRole),
+        }, pendingAiPresetBlocks.length),
+      ];
+      selectedAiPresetBlockIndex = pendingAiPresetBlocks.length - 1;
+      aiPresetStatusMessage = '已添加信息块';
+      aiPresetSubView = 'list';
+      renderAiPresetContent();
+      return true;
+    }
+
+    function cycleAiPresetInfoRole(step = 1) {
+      const roleOptions = ['system', 'user', 'assistant'];
+      const currentIndex = Math.max(0, roleOptions.indexOf(normalizeAiPresetInfoRole(pendingAiPresetInfoRole)));
+      const nextIndex = (currentIndex + step + roleOptions.length) % roleOptions.length;
+      pendingAiPresetInfoRole = roleOptions[nextIndex];
+      renderAiPresetContent();
+      return pendingAiPresetInfoRole;
+    }
+
+    function openAiPresetInfoBlockCreatePage() {
+      pendingAiPresetInfoRole = 'system';
+      aiPresetInfoSourcePickerTargetIndex = -1;
+      aiPresetStatusMessage = '选择信息块来源';
+      aiPresetSubView = 'infoCreate';
+      renderAiPresetContent();
+    }
+
     function moveAiPresetBlock(index, step) {
       const sourceIndex = Number(index);
       const offset = Number(step);
@@ -1079,6 +1299,17 @@ window.ButterflyDiarySettings = {
           continue;
         }
 
+        if (role === '_info') {
+          const infoText = await getAiPresetInfoSourceText(block?.infoSourceId);
+          if (infoText) {
+            messages.push({
+              role: normalizeAiPresetInfoRole(block?.infoRole),
+              content: `${String(block?.name || '信息块').trim() || '信息块'}：\n${infoText}`,
+            });
+          }
+          continue;
+        }
+
         const content = String(block?.text || '').trim();
         if (!content) continue;
         messages.push({ role, content });
@@ -1090,7 +1321,8 @@ window.ButterflyDiarySettings = {
     function buildDiaryJsonGenerationInstruction() {
       return [
         '你现在要输出“蝴蝶日记 JSON”。',
-        '只返回合法 JSON，不要返回解释、前后缀、Markdown、代码块或额外说明。',
+        '你可以在 JSON 数组前额外输出一个 <diary_summary>总结正文</diary_summary> 标签。',
+        '除这个 <diary_summary> 标签外，不要返回解释、前后缀、Markdown、代码块或额外说明。',
         '根节点必须是数组。',
         '数组中的每个对象都必须且只能包含以下 5 个字符串字段：日期、天气、心情、配图文本、日记内容。',
         '字段说明：',
@@ -1100,8 +1332,9 @@ window.ButterflyDiarySettings = {
         '4. 配图文本：可直接用于配图/插画生成的画面描述。',
         '5. 日记内容：完整的日记正文。',
         '如果只生成一篇，也必须返回只有 1 项的 JSON 数组。',
+        '如果需要输出总结，必须固定使用 <diary_summary> 标签，不要使用其他标签名。',
         '示例：',
-        '[{"日期":"2026-04-01","天气":"晴","心情":"轻松","配图文本":"校园黄昏，窗边课桌，暖色夕阳，书本与蝴蝶元素","日记内容":"今天放学前的夕阳很好看……"}]'
+        '<diary_summary>今天整体情绪从紧张转为轻松，重点是校园傍晚与日常细节。</diary_summary>\n[{"日期":"2026-04-01","天气":"晴","心情":"轻松","配图文本":"校园黄昏，窗边课桌，暖色夕阳，书本与蝴蝶元素","日记内容":"今天放学前的夕阳很好看……"}]'
       ].join('\n');
     }
 
@@ -1142,7 +1375,19 @@ window.ButterflyDiarySettings = {
       return String(rawContent || '').trim();
     }
 
-    async function requestDiaryJsonGeneration({ source = 'preset_generate', writeMode = 'replace' } = {}) {
+    function extractDiarySummaryFromGenerationText(text = '') {
+      const normalizedText = String(text || '').trim();
+      if (!normalizedText) return '';
+      return extractTagContentWithTag(normalizedText, 'diary_summary');
+    }
+
+    async function requestDiaryJsonGeneration({
+      source = 'preset_generate',
+      writeMode = 'append',
+      updateLatest = true,
+      updateHistory = true,
+      historyWriteMode = '',
+    } = {}) {
       const selectedProfile = getSelectedAiApiProfile(aiSettings);
       if (!selectedProfile?.url) {
         throw new Error('请先配置端点');
@@ -1190,9 +1435,11 @@ window.ButterflyDiarySettings = {
       if (!generatedText) {
         throw new Error('返回内容为空');
       }
+      const generatedSummary = extractDiarySummaryFromGenerationText(generatedText);
 
       const diaryDataApi = window.ButterflyDiaryData;
-      const diaryVariableName = String(diaryDataApi?.DIARY_VARIABLE_NAME || 'butterfly_journal').trim();
+      const latestDiaryVariableName = String(diaryDataApi?.DIARY_VARIABLE_NAME || 'butterfly_journal_latest').trim();
+      const historyDiaryVariableName = String(diaryDataApi?.DIARY_HISTORY_VARIABLE_NAME || 'butterfly_journal_history').trim();
       const normalizedDiaryJsonResult = typeof diaryDataApi?.normalizeGeneratedDiaryJsonValue === 'function'
         ? diaryDataApi.normalizeGeneratedDiaryJsonValue(generatedText)
         : null;
@@ -1203,13 +1450,19 @@ window.ButterflyDiarySettings = {
         throw new Error('日记变量写入接口不可用');
       }
 
+      const normalizedHistoryWriteMode = String(historyWriteMode || writeMode || '').trim() === 'replace' ? 'replace' : 'append';
       const saveResult = await diaryDataApi.saveDiaryValueToChatVariable(normalizedDiaryJsonResult.rawValue, {
         source,
-        mergeMode: writeMode === 'append' ? 'append' : 'replace',
+        mergeMode: normalizedHistoryWriteMode,
+        updateLatest,
+        updateHistory,
+        historyMergeMode: normalizedHistoryWriteMode,
+        summary: generatedSummary,
       });
 
       return {
-        diaryVariableName,
+        latestDiaryVariableName,
+        historyDiaryVariableName,
         saveResult,
         generatedEntries: normalizedDiaryJsonResult.entries,
         rawValue: normalizedDiaryJsonResult.rawValue,
@@ -1224,12 +1477,18 @@ window.ButterflyDiarySettings = {
       renderAiPresetContent();
 
       try {
+        const updateHistory = pendingManualGenerateLatestMode === 'latest_and_history';
         const result = await requestDiaryJsonGeneration({
           source: 'preset_generate',
-          writeMode: 'replace',
+          writeMode: pendingManualGenerateHistoryMode,
+          updateLatest: true,
+          updateHistory,
+          historyWriteMode: pendingManualGenerateHistoryMode,
         });
         aiPresetStatusMessage = result.saveResult?.persisted
-          ? `已写入聊天变量「${result.diaryVariableName}」`
+          ? (updateHistory
+            ? `已写入最新变量「${result.latestDiaryVariableName}」并${getManualGenerateHistoryModeLabel(pendingManualGenerateHistoryMode)}到历史变量「${result.historyDiaryVariableName}」`
+            : `已写入最新变量「${result.latestDiaryVariableName}」`)
           : '已更新日记 JSON，但未写入聊天变量';
         renderAiPresetContent();
         return true;
@@ -1276,7 +1535,7 @@ window.ButterflyDiarySettings = {
         {
           id: 'diary_entries',
           name: '日记内容',
-          subtitle: `当前聊天变量 ${String(window.ButterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal')} 中的内容（无变量时回退默认日记）`,
+          subtitle: `优先读取历史变量 ${String(window.ButterflyDiaryData?.DIARY_HISTORY_VARIABLE_NAME || 'butterfly_journal_history')}，其次读取最新变量 ${String(window.ButterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal_latest')}，无变量时回退默认日记`,
           scope: 'diary',
         },
       ];
@@ -1460,6 +1719,36 @@ window.ButterflyDiarySettings = {
       return true;
     }
 
+    async function openAiPresetInfoBlockPreview(index = selectedAiPresetBlockIndex) {
+      const targetIndex = Number(index);
+      const blocks = normalizeAiPresetBlocks(pendingAiPresetBlocks);
+      if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= blocks.length) return false;
+      const targetBlock = blocks[targetIndex];
+      if (String(targetBlock?.role || '').trim() !== '_info') return false;
+
+      aiPresetPreviewTitle = getAiPresetBlockDisplayName(targetBlock, targetIndex) || '信息块';
+      aiPresetPreviewStatus = '读取中…';
+      aiPresetPreviewText = '';
+      aiPresetPreviewReturnView = 'list';
+      aiPresetSubView = 'preview';
+      renderAiPresetContent();
+
+      try {
+        const infoText = await getAiPresetInfoSourceText(targetBlock?.infoSourceId);
+        aiPresetPreviewText = infoText || '暂无内容';
+        aiPresetPreviewStatus = infoText ? '信息块预览' : '暂无内容';
+      } catch (error) {
+        aiPresetPreviewText = '';
+        aiPresetPreviewStatus = '读取失败';
+        console.warn('[Butterfly Diary][预设] 信息块预览读取失败', error);
+      }
+
+      if (aiPresetSubView === 'preview') {
+        renderAiPresetContent();
+      }
+      return true;
+    }
+
     function closeAiPresetPreview() {
       aiPresetSubView = aiPresetPreviewReturnView || 'list';
       renderAiPresetContent();
@@ -1475,7 +1764,54 @@ window.ButterflyDiarySettings = {
         openAiPresetContextBlockPreview(targetIndex);
         return;
       }
+      if (String(targetBlock?.role || '').trim() === '_info') {
+        openAiPresetInfoBlockPreview(targetIndex);
+        return;
+      }
       openAiPresetEditor(targetIndex);
+    }
+
+    function openAiPresetInfoSourcePicker(index = selectedAiPresetBlockIndex) {
+      const targetIndex = Number(index);
+      const blocks = normalizeAiPresetBlocks(pendingAiPresetBlocks);
+      if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= blocks.length) return false;
+      const targetBlock = blocks[targetIndex];
+      if (String(targetBlock?.role || '').trim() !== '_info') return false;
+      selectedAiPresetBlockIndex = targetIndex;
+      aiPresetInfoSourcePickerTargetIndex = targetIndex;
+      pendingAiPresetInfoRole = normalizeAiPresetInfoRole(targetBlock?.infoRole);
+      aiPresetSubView = 'infoSourcePicker';
+      aiPresetStatusMessage = '切换信息块来源';
+      renderAiPresetContent();
+      return true;
+    }
+
+    function applyAiPresetInfoSourceSelection(sourceId = '', sourceName = '') {
+      const normalizedSourceId = String(sourceId || '').trim();
+      const normalizedSourceName = String(sourceName || '').trim();
+      if (!normalizedSourceId) return false;
+      const targetIndex = Number(aiPresetInfoSourcePickerTargetIndex);
+      if (Number.isFinite(targetIndex) && targetIndex >= 0) {
+        const blocks = normalizeAiPresetBlocks(pendingAiPresetBlocks);
+        if (targetIndex < 0 || targetIndex >= blocks.length) return false;
+        const targetBlock = blocks[targetIndex];
+        if (String(targetBlock?.role || '').trim() !== '_info') return false;
+        blocks[targetIndex] = normalizeAiPresetBlock({
+          ...targetBlock,
+          name: normalizedSourceName || targetBlock.name || '信息块',
+          infoSourceId: normalizedSourceId,
+          infoRole: normalizeAiPresetInfoRole(pendingAiPresetInfoRole),
+        }, targetIndex);
+        pendingAiPresetBlocks = blocks;
+        selectedAiPresetBlockIndex = targetIndex;
+        aiPresetStatusMessage = '已更新信息块';
+      } else {
+        addAiPresetInfoBlock(normalizedSourceId, normalizedSourceName, pendingAiPresetInfoRole);
+        return true;
+      }
+      aiPresetSubView = 'list';
+      renderAiPresetContent();
+      return true;
     }
 
     function normalizeWorldBookPickerEntries(worldBooks) {
@@ -1841,18 +2177,23 @@ window.ButterflyDiarySettings = {
     async function runJournalAutoTriggerNow() {
       if (aiPresetGenerating) return false;
 
-      const selectedWriteMode = pendingJournalAutoTriggerWriteMode === 'replace' ? 'replace' : 'append';
+      const manualUpdateHistory = pendingManualGenerateLatestMode === 'latest_and_history';
       aiPresetGenerating = true;
-      journalAutoTriggerStatusMessage = '自动写入中…';
+      journalAutoTriggerStatusMessage = '手动写入中…';
       renderAutoTriggerContent();
 
       try {
         const result = await requestDiaryJsonGeneration({
-          source: 'auto_trigger_manual',
-          writeMode: selectedWriteMode,
+          source: 'manual_generate',
+          writeMode: pendingManualGenerateHistoryMode,
+          updateLatest: true,
+          updateHistory: manualUpdateHistory,
+          historyWriteMode: pendingManualGenerateHistoryMode,
         });
         journalAutoTriggerStatusMessage = result.saveResult?.persisted
-          ? `已立即执行 · ${result.generatedEntries.length} 篇 · ${getJournalAutoTriggerWriteModeLabel(selectedWriteMode)}`
+          ? (manualUpdateHistory
+            ? `已立即执行 · ${result.generatedEntries.length} 篇 · ${getManualGenerateHistoryModeLabel(pendingManualGenerateHistoryMode)}`
+            : `已立即执行 · ${result.generatedEntries.length} 篇 · 仅刷新最新`)
           : '已生成日记 JSON，但未写入聊天变量';
         renderAutoTriggerContent();
         return true;
@@ -1911,10 +2252,13 @@ window.ButterflyDiarySettings = {
       try {
         const result = await requestDiaryJsonGeneration({
           source: 'auto_trigger_background',
-          writeMode: runtimeSettings.writeMode,
+          writeMode: 'append',
+          updateLatest: true,
+          updateHistory: true,
+          historyWriteMode: 'append',
         });
         journalAutoTriggerStatusMessage = result.saveResult?.persisted
-          ? `自动写入成功 · ${result.generatedEntries.length} 篇 · ${getJournalAutoTriggerWriteModeLabel(runtimeSettings.writeMode)}`
+          ? `自动写入成功 · ${result.generatedEntries.length} 篇 · 最新覆盖 / 历史追加`
           : '自动生成完成，但未写入聊天变量';
         if (getCurrentView() === 'settings') {
           renderAutoTriggerContent();
@@ -2010,6 +2354,15 @@ window.ButterflyDiarySettings = {
         }
         if (aiPresetSubView === 'editor') {
           closeAiPresetEditor();
+          return true;
+        }
+        if (aiPresetSubView === 'importExport') {
+          closeAiPresetImportExport();
+          return true;
+        }
+        if (aiPresetSubView === 'infoSourcePicker' || aiPresetSubView === 'infoCreate') {
+          aiPresetSubView = 'list';
+          renderAiPresetContent();
           return true;
         }
         return false;
@@ -2190,6 +2543,10 @@ window.ButterflyDiarySettings = {
 
       if (event.target.id === 'journal-auto-trigger-interval-input') {
         pendingJournalAutoTriggerInterval = event.target.value;
+      }
+
+      if (event.target.id === 'ai-preset-import-export-text') {
+        aiPresetImportExportText = event.target.value;
       }
 
       if (event.target.id === 'ai-preset-block-name-input') {
@@ -2474,6 +2831,50 @@ window.ButterflyDiarySettings = {
         return;
       }
 
+      if (event.target.closest('#ai-preset-add-info')) {
+        openAiPresetInfoBlockCreatePage();
+        return;
+      }
+
+      if (event.target.closest('#ai-preset-info-role-toggle')) {
+        cycleAiPresetInfoRole();
+        return;
+      }
+
+      const aiPresetCreateSourceItem = event.target.closest('[data-ai-preset-create-source-id]');
+      if (aiPresetCreateSourceItem && (aiPresetSubView === 'infoCreate' || aiPresetSubView === 'infoSourcePicker')) {
+        applyAiPresetInfoSourceSelection(
+          aiPresetCreateSourceItem.dataset.aiPresetCreateSourceId || '',
+          aiPresetCreateSourceItem.dataset.aiPresetCreateSourceName || ''
+        );
+        return;
+      }
+
+      if (event.target.closest('#ai-preset-import-only')) {
+        openAiPresetImportExport();
+        aiPresetStatusMessage = '导入模式';
+        renderAiPresetContent();
+        return;
+      }
+
+      if (event.target.closest('#ai-preset-export-only')) {
+        openAiPresetImportExport();
+        aiPresetStatusMessage = '导出模式';
+        renderAiPresetContent();
+        return;
+      }
+
+      if (event.target.closest('#ai-preset-import-apply')) {
+        importAiPresetFromText(aiPresetImportExportText);
+        return;
+      }
+
+      if (event.target.closest('#ai-preset-export-refresh')) {
+        aiPresetImportExportText = JSON.stringify(exportAiPresetPayload(), null, 2);
+        renderAiPresetContent();
+        return;
+      }
+
       if (event.target.closest('#ai-preset-generate')) {
         generateDiaryFromPreset();
         return;
@@ -2505,7 +2906,18 @@ window.ButterflyDiarySettings = {
       }
 
       if (event.target.closest('#journal-auto-trigger-write-mode-toggle')) {
-        pendingJournalAutoTriggerWriteMode = pendingJournalAutoTriggerWriteMode === 'replace' ? 'append' : 'replace';
+        renderAutoTriggerContent();
+        return;
+      }
+
+      if (event.target.closest('#manual-generate-latest-mode-toggle')) {
+        pendingManualGenerateLatestMode = pendingManualGenerateLatestMode === 'latest_and_history' ? 'latest_only' : 'latest_and_history';
+        renderAutoTriggerContent();
+        return;
+      }
+
+      if (event.target.closest('#manual-generate-history-mode-toggle')) {
+        pendingManualGenerateHistoryMode = pendingManualGenerateHistoryMode === 'replace' ? 'append' : 'replace';
         renderAutoTriggerContent();
         return;
       }
@@ -2533,6 +2945,7 @@ window.ButterflyDiarySettings = {
       const aiPresetBlockItem = event.target.closest('[data-ai-preset-block-index]');
       if (aiPresetBlockItem && aiPresetSubView === 'list') {
         openAiPresetItem(aiPresetBlockItem.dataset.aiPresetBlockIndex);
+        return;
       }
     }
 
@@ -2754,18 +3167,16 @@ window.ButterflyDiarySettings = {
     function renderAiMainChatPreviewView() {
       return `
         <div class="app-mainline">主聊天预览</div>
-        <div class="settings-editor">
-          <div class="ai-mainchat-preview" id="ai-mainchat-preview-output">${escapeHtml(aiMainChatPreviewText || '')}</div>
-        </div>
-        <div class="app-microline ai-mainchat-preview-status">${escapeHtml(aiMainChatPreviewStatus || '仅读取酒馆主聊天中的 AI / 用户消息')}</div>
-        <div class="settings-list">
-          <button class="setting-row" id="ai-mainchat-preview-refresh" type="button">
-            <span class="setting-row-label">刷新预览</span>
-            <span class="setting-row-value-wrap">
-              <span class="setting-row-value">刷新</span>
-              <span class="setting-row-arrow">↻</span>
-            </span>
-          </button>
+        <div class="ai-mainchat-preview-layout">
+          <div class="settings-editor ai-mainchat-preview-stage">
+            <div class="ai-mainchat-preview" id="ai-mainchat-preview-output">${escapeHtml(aiMainChatPreviewText || '')}</div>
+            <div class="app-microline ai-mainchat-preview-status">${escapeHtml(aiMainChatPreviewStatus || '仅读取酒馆主聊天中的 AI / 用户消息')}</div>
+          </div>
+          <div class="ai-mainchat-preview-actions">
+            <button class="setting-row ai-preset-side-button" id="ai-mainchat-preview-refresh" type="button">
+              <span class="setting-row-label">刷新</span>
+            </button>
+          </div>
         </div>
       `;
     }
@@ -2808,8 +3219,14 @@ window.ButterflyDiarySettings = {
             <button class="setting-row ai-preset-side-button" id="ai-preset-add-context" type="button" title="新增主聊天槽">
               <span class="setting-row-label">主聊天</span>
             </button>
-            <button class="setting-row ai-preset-side-button" id="ai-preset-generate" type="button" title="生成固定日记 JSON 并写入 butterfly_journal 聊天变量" ${aiPresetGenerating ? 'disabled' : ''}>
-              <span class="setting-row-label">${escapeHtml(aiPresetGenerating ? '生成中' : '生成')}</span>
+            <button class="setting-row ai-preset-side-button" id="ai-preset-add-info" type="button" title="新增信息块">
+              <span class="setting-row-label">信息块</span>
+            </button>
+            <button class="setting-row ai-preset-side-button" id="ai-preset-import-only" type="button" title="导入预设 JSON">
+              <span class="setting-row-label">导入</span>
+            </button>
+            <button class="setting-row ai-preset-side-button" id="ai-preset-export-only" type="button" title="导出预设 JSON">
+              <span class="setting-row-label">导出</span>
             </button>
             <button class="setting-row ai-preset-side-button" id="ai-preset-preview-open" type="button" title="预设总览">
               <span class="setting-row-label">总览</span>
@@ -2848,6 +3265,59 @@ window.ButterflyDiarySettings = {
               </span>
             </button>
           </div>
+        </div>
+      `;
+    }
+
+    function renderAiPresetInfoSourcePickerView() {
+      const sources = getAiPresetInfoSources();
+      const roleLabel = normalizeAiPresetInfoRole(pendingAiPresetInfoRole);
+      const sourceHtml = sources.length
+        ? sources.map((source) => `
+            <button class="screensaver-saved-item" data-ai-preset-create-source-id="${escapeHtml(source.id)}" data-ai-preset-create-source-name="${escapeHtml(source.name)}" type="button">
+              <div class="screensaver-saved-main">
+                <span class="screensaver-saved-name">${escapeHtml(source.name)}</span>
+                <span class="screensaver-saved-url">${escapeHtml(source.subtitle || '')}</span>
+              </div>
+            </button>
+          `).join('')
+        : '<div class="app-subline ai-api-empty">暂无信息来源</div>';
+      return `
+        <div class="app-mainline">${escapeHtml(aiPresetStatusMessage || '选择信息块来源')}</div>
+        <div class="settings-list">
+          <button class="setting-row" id="ai-preset-info-role-toggle" type="button">
+            <span class="setting-row-label">信息块角色</span>
+            <span class="setting-row-value-wrap">
+              <span class="setting-row-value">${escapeHtml(roleLabel)}</span>
+              <span class="setting-row-arrow">⇆</span>
+            </span>
+          </button>
+        </div>
+        <div class="screensaver-saved-list">${sourceHtml}</div>
+      `;
+    }
+
+    function renderAiPresetImportExportView() {
+      return `
+        <div class="app-mainline">${escapeHtml(aiPresetStatusMessage || '预设导入导出')}</div>
+        <div class="settings-editor ai-preset-message-editor">
+          <textarea class="settings-editor-input ai-preset-message-textarea" id="ai-preset-import-export-text" spellcheck="false" placeholder="粘贴预设 JSON，或复制当前导出内容">${escapeHtml(aiPresetImportExportText || '')}</textarea>
+        </div>
+        <div class="settings-list">
+          <button class="setting-row" id="ai-preset-import-apply" type="button">
+            <span class="setting-row-label">导入到当前预设</span>
+            <span class="setting-row-value-wrap">
+              <span class="setting-row-value">导入</span>
+              <span class="setting-row-arrow">↓</span>
+            </span>
+          </button>
+          <button class="setting-row" id="ai-preset-export-refresh" type="button">
+            <span class="setting-row-label">刷新导出内容</span>
+            <span class="setting-row-value-wrap">
+              <span class="setting-row-value">导出</span>
+              <span class="setting-row-arrow">↑</span>
+            </span>
+          </button>
         </div>
       `;
     }
@@ -3207,8 +3677,12 @@ window.ButterflyDiarySettings = {
         contentHtml = renderAiMainChatConfig();
       }
 
+      const shellClassName = aiMainChatSubView === 'preview'
+        ? 'diary-settings-shell diary-settings-shell--preview'
+        : 'diary-settings-shell';
+
       settingsMainChatContent.innerHTML = `
-        <div class="diary-settings-shell">
+        <div class="${shellClassName}">
           ${contentHtml}
         </div>
       `;
@@ -3222,6 +3696,10 @@ window.ButterflyDiarySettings = {
         contentHtml = renderAiPresetMessageEditor();
       } else if (aiPresetSubView === 'preview') {
         contentHtml = renderAiPresetPreviewView();
+      } else if (aiPresetSubView === 'infoSourcePicker' || aiPresetSubView === 'infoCreate') {
+        contentHtml = renderAiPresetInfoSourcePickerView();
+      } else if (aiPresetSubView === 'importExport') {
+        contentHtml = renderAiPresetImportExportView();
       } else {
         contentHtml = renderAiPresetListView();
       }
@@ -3236,7 +3714,6 @@ window.ButterflyDiarySettings = {
     function renderAutoTriggerContent() {
       if (!settingsAutoTriggerContent) return;
 
-      const diaryVariableName = String(window.ButterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal').trim() || 'butterfly_journal';
       const runNowLabel = aiPresetGenerating ? '执行中' : '立即执行';
 
       settingsAutoTriggerContent.innerHTML = `
@@ -3258,20 +3735,37 @@ window.ButterflyDiarySettings = {
               </span>
             </button>
             <button class="setting-row" id="journal-auto-trigger-write-mode-toggle" type="button">
-              <span class="setting-row-label">写入方式</span>
+              <span class="setting-row-label">自动触发历史写入</span>
               <span class="setting-row-value-wrap">
-                <span class="setting-row-value">${escapeHtml(getJournalAutoTriggerWriteModeLabel(pendingJournalAutoTriggerWriteMode))}</span>
-                <span class="setting-row-arrow">⇆</span>
+                <span class="setting-row-value">固定追加</span>
+                <span class="setting-row-arrow">✓</span>
               </span>
             </button>
           </div>
           <div class="settings-editor journal-auto-trigger-editor">
             <div class="app-subline">楼层间隔</div>
             <input class="settings-editor-field" id="journal-auto-trigger-interval-input" type="number" min="1" max="99" step="1" inputmode="numeric" spellcheck="false" value="${escapeHtml(pendingJournalAutoTriggerInterval)}" placeholder="1-99">
+            <div class="app-microline">自动触发固定：latest 覆盖、history 追加。</div>
+          </div>
+          <div class="settings-list">
+            <button class="setting-row" id="manual-generate-latest-mode-toggle" type="button">
+              <span class="setting-row-label">手动生成范围</span>
+              <span class="setting-row-value-wrap">
+                <span class="setting-row-value">${escapeHtml(getManualGenerateLatestModeLabel(pendingManualGenerateLatestMode))}</span>
+                <span class="setting-row-arrow">⇆</span>
+              </span>
+            </button>
+            <button class="setting-row" id="manual-generate-history-mode-toggle" type="button">
+              <span class="setting-row-label">手动历史写入</span>
+              <span class="setting-row-value-wrap">
+                <span class="setting-row-value">${escapeHtml(getManualGenerateHistoryModeLabel(pendingManualGenerateHistoryMode))}</span>
+                <span class="setting-row-arrow">⇆</span>
+              </span>
+            </button>
           </div>
           <div class="settings-list">
             <button class="setting-row" id="journal-auto-trigger-save" type="button">
-              <span class="setting-row-label">保存自动触发</span>
+              <span class="setting-row-label">保存自动/手动策略</span>
               <span class="setting-row-value-wrap">
                 <span class="setting-row-value">保存</span>
                 <span class="setting-row-arrow">✓</span>
@@ -3392,6 +3886,8 @@ window.ButterflyDiarySettings = {
       aiPresetPreviewStatus = '';
       aiPresetPreviewReturnView = 'list';
       aiPresetGenerating = false;
+      pendingAiPresetInfoRole = 'system';
+      aiPresetInfoSourcePickerTargetIndex = -1;
 
       resetAiPresetDraftState();
       selectedAiPresetBlockIndex = -1;

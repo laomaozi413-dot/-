@@ -10,15 +10,30 @@
   --line-color: #c7d8e1;
 }
 
+html {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
 body {
+  --embedded-safe-left: 8px;
+  --embedded-safe-right: 8px;
+  --embedded-safe-top: 16px;
+  --embedded-safe-bottom: 8px;
+  box-sizing: border-box;
   margin: 0;
-  padding: 0;
+  padding: var(--embedded-safe-top) var(--embedded-safe-right) var(--embedded-safe-bottom) var(--embedded-safe-left);
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background-color: #ffffff;
+  background: transparent;
+  background-color: transparent;
   perspective: 1200px;
+  overflow: visible;
 }
 
 /* 将容器比例和尺寸调整为精确的 396x538 px */
@@ -26,8 +41,9 @@ body {
   position: relative;
   width: 396px;
   height: 538px;
-  margin-top: 30px;
   transform-style: preserve-3d;
+  scale: var(--embedded-notebook-scale, 1);
+  transform-origin: center center;
 }
 
 /* 下封皮与底部真实阴影 */
@@ -78,7 +94,8 @@ body {
 }
 
 .butterfly-container.inner-page-butterflies {
-  z-index: 5;
+  z-index: 40;
+  pointer-events: none;
 }
 
 .butterfly-container.inner-page-butterflies .butterfly {
@@ -91,7 +108,7 @@ body {
 /* 内页上的小蝴蝶们 */
 .inner-butterfly {
   position: absolute;
-  z-index: 5;
+  z-index: 40;
   opacity: 0.6;
   mix-blend-mode: multiply;
 }
@@ -105,6 +122,7 @@ body {
   height: 538px;
   border-radius: 24px;
   overflow: hidden;
+  z-index: 40;
 }
 
 /* 蝴蝶贴图通用样式 */

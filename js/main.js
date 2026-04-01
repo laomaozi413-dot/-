@@ -631,7 +631,7 @@
 
   Promise.resolve(butterflyDiaryData.loadDiaryEntriesFromChatVariable?.())
     .catch((error) => {
-      console.warn(`[Butterfly Diary] 读取聊天变量「${String(butterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal')}」失败，已回退为默认日记。`, error);
+      console.warn(`[Butterfly Diary] 读取日记聊天变量失败（历史：${String(butterflyDiaryData?.DIARY_HISTORY_VARIABLE_NAME || 'butterfly_journal_history')} / 最新：${String(butterflyDiaryData?.DIARY_VARIABLE_NAME || 'butterfly_journal_latest')}），已回退为默认日记。`, error);
     });
 
   resetSettingsPages();
@@ -655,6 +655,29 @@
     });
   }
 
+  function fitNotebookToViewport() {
+    const notebookEl = document.querySelector('.notebook-container');
+    if (!notebookEl || !document.documentElement) return;
+
+    document.documentElement.style.setProperty('--embedded-notebook-scale', '1');
+
+    const bodyStyle = window.getComputedStyle(document.body);
+    const paddingX = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+    const paddingY = (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0);
+    const margin = 4;
+    const rect = notebookEl.getBoundingClientRect();
+    const availableWidth = Math.max(1, window.innerWidth - paddingX - margin * 2);
+    const availableHeight = Math.max(1, window.innerHeight - paddingY - margin * 2);
+    const scale = Math.min(availableWidth / rect.width, availableHeight / rect.height);
+
+    document.documentElement.style.setProperty('--embedded-notebook-scale', String(scale));
+    window.scrollTo(0, 0);
+  }
+
+  window.addEventListener('resize', fitNotebookToViewport);
   refreshPageStates();
   refreshSettingsPageStates();
+  fitNotebookToViewport();
 })();
+
+

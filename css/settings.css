@@ -1,7 +1,7 @@
 .settings-page-wrapper {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 20;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -69,6 +69,10 @@
   padding-bottom: 138px;
 }
 
+.diary-settings-shell--preview {
+  padding-bottom: 12px;
+}
+
 .diary-settings-shell > .app-mainline {
   margin-bottom: 14px;
 }
@@ -116,6 +120,22 @@
   padding-right: 2px;
 }
 
+.ai-mainchat-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: calc(100% + 66px);
+  margin-right: -66px;
+}
+
+.ai-mainchat-preview-stage {
+  min-height: 0;
+  gap: 8px;
+}
+
 .ai-mainchat-preview {
   flex: 1;
   min-height: 0;
@@ -132,8 +152,15 @@
   box-sizing: border-box;
 }
 
+.ai-mainchat-preview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: start;
+}
+
 .ai-mainchat-preview-status {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .ai-mainchat-rule {
@@ -215,6 +242,7 @@
   background: transparent;
   border-radius: 0;
   padding: 0;
+  gap: 8px;
 }
 
 .ai-preset-block-stage.is-empty {

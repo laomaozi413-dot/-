@@ -1,6 +1,8 @@
 window.ButterflyDiaryData = (() => {
-  const DIARY_VARIABLE_NAME = 'butterfly_journal';
-  const LEGACY_DIARY_VARIABLE_NAMES = ['日记'];
+  const DIARY_VARIABLE_NAME = 'butterfly_journal_latest';
+  const DIARY_HISTORY_VARIABLE_NAME = 'butterfly_journal_history';
+  const LEGACY_DIARY_VARIABLE_NAMES = ['butterfly_journal', '日记'];
+  const DIARY_SUMMARY_TAG_NAME = 'diary_summary';
 
   const defaultDiaryEntries = [
     {
@@ -68,6 +70,10 @@ window.ButterflyDiaryData = (() => {
   function pickFirstNonEmptyString(values = []) {
     const matchedValue = (Array.isArray(values) ? values : []).find((value) => typeof value === 'string' && value.trim());
     return matchedValue ? matchedValue.trim() : '';
+  }
+
+  function escapeRegExp(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   function hasStructuredDiaryFields(entry) {
@@ -180,10 +186,18 @@ window.ButterflyDiaryData = (() => {
     return JSON.stringify(normalizeStructuredDiaryPayloadEntries(entries), null, 2);
   }
 
+  function removeDiarySummaryTagFromText(rawText = '') {
+    const normalizedText = unwrapCodeFence(rawText);
+    if (!normalizedText) return '';
+    return normalizedText
+      .replace(new RegExp(`<${escapeRegExp(DIARY_SUMMARY_TAG_NAME)}>[\\s\\S]*?<\/${escapeRegExp(DIARY_SUMMARY_TAG_NAME)}>`, 'gi'), '')
+      .trim();
+  }
+
   function normalizeGeneratedDiaryJsonValue(rawValue) {
     let nextValue = rawValue;
     if (typeof nextValue === 'string') {
-      const normalizedText = unwrapCodeFence(nextValue);
+      const normalizedText = removeDiarySummaryTagFromText(nextValue);
       if (!normalizedText) return null;
       try {
         nextValue = JSON.parse(normalizedText);
@@ -217,6 +231,58 @@ window.ButterflyDiaryData = (() => {
     const normalizedText = String(text || '').trim();
     const matched = normalizedText.match(/^```(?:json|txt|text|markdown)?\s*([\s\S]*?)\s*```$/i);
     return matched ? String(matched[1] || '').trim() : normalizedText;
+  }
+
+  function extractTagContentWithTag(text, tagName) {
+    const normalizedTag = String(tagName || '').trim();
+    if (!normalizedTag) return '';
+    const regex = new RegExp(`(<${escapeRegExp(normalizedTag)}>([\\s\\S]*?)<\/${escapeRegExp(normalizedTag)}>)`, 'gi');
+    const matches = [];
+    let match;
+    while ((match = regex.exec(String(text || ''))) !== null) {
+      matches.push(String(match[2] || '').trim());
+    }
+    return matches.join('\n\n').trim();
+  }
+
+  function extractDiarySummaryFromText(rawText = '') {
+    const normalizedText = unwrapCodeFence(rawText);
+    if (!normalizedText) return '';
+    return extractTagContentWithTag(normalizedText, DIARY_SUMMARY_TAG_NAME);
+  }
+
+  function extractDiarySummaryFromRawValue(rawValue) {
+    if (rawValue == null) return '';
+    if (typeof rawValue === 'string') {
+      return extractDiarySummaryFromText(rawValue);
+    }
+    if (rawValue && typeof rawValue === 'object') {
+      return pickFirstNonEmptyString([
+        rawValue.summary,
+        rawValue['总结'],
+        rawValue.summaryText,
+        rawValue.summary_text,
+        rawValue.diarySummary,
+        rawValue.diary_summary,
+      ]);
+    }
+    return '';
+  }
+
+  function normalizeDiaryVariablePayload(rawValue, fallbackEntries = []) {
+    const summary = extractDiarySummaryFromRawValue(rawValue);
+    const structuredEntries = normalizeStructuredDiaryPayloadEntries(fallbackEntries);
+    return {
+      summary,
+      entries: structuredEntries,
+    };
+  }
+
+  function serializeDiaryVariablePayload({ summary = '', entries = [] } = {}) {
+    return JSON.stringify({
+      summary: String(summary || '').trim(),
+      entries: normalizeStructuredDiaryPayloadEntries(entries),
+    }, null, 2);
   }
 
   function normalizeDiaryEntry(entry, index = 0, { fallbackTitlePrefix = '日记' } = {}) {
@@ -359,6 +425,7 @@ window.ButterflyDiaryData = (() => {
 
   let runtimeDiaryEntries = normalizeDiaryEntries(defaultDiaryEntries, { fallbackTitlePrefix: '校园日记' });
   let runtimeDiaryRawValue = '';
+  let runtimeDiarySummary = '';
   let runtimeDiarySource = 'default';
 
   function getDiaryEntries() {
@@ -367,6 +434,10 @@ window.ButterflyDiaryData = (() => {
 
   function getDiaryRawValue() {
     return String(runtimeDiaryRawValue || '').trim() || diaryEntriesToText(runtimeDiaryEntries);
+  }
+
+  function getDiarySummary() {
+    return String(runtimeDiarySummary || '').trim();
   }
 
   function getDiaryTextForPrompt() {
@@ -389,19 +460,22 @@ window.ButterflyDiaryData = (() => {
         detail: {
           entries: getDiaryEntries(),
           rawValue: getDiaryRawValue(),
+          summary: getDiarySummary(),
           source: runtimeDiarySource,
         },
       }));
     } catch (error) {}
   }
 
-  function setRuntimeDiaryEntries(entries, { rawValue = '', source = 'runtime', dispatch = true } = {}) {
+  function setRuntimeDiaryEntries(entries, { rawValue = '', summary = '', source = 'runtime', dispatch = true } = {}) {
     runtimeDiaryEntries = normalizeDiaryEntries(entries, { fallbackTitlePrefix: '日记' });
     runtimeDiaryRawValue = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+    runtimeDiarySummary = String(summary || '').trim();
     runtimeDiarySource = String(source || 'runtime').trim() || 'runtime';
 
     api.diaryEntries = getDiaryEntries();
     api.rawDiaryValue = runtimeDiaryRawValue;
+    api.summary = runtimeDiarySummary;
     api.source = runtimeDiarySource;
 
     if (dispatch) {
@@ -422,7 +496,8 @@ window.ButterflyDiaryData = (() => {
         ? rawValue
         : (rawValue == null ? '' : JSON.stringify(rawValue, null, 2));
       const parsedEntries = parseDiaryVariableValue(rawValue);
-      if (!serializedRawValue && !parsedEntries.length) {
+      const summary = extractDiarySummaryFromRawValue(rawValue);
+      if (!serializedRawValue && !parsedEntries.length && !summary) {
         return null;
       }
       return {
@@ -430,6 +505,7 @@ window.ButterflyDiaryData = (() => {
         rawValue,
         serializedRawValue,
         parsedEntries,
+        summary,
       };
     } catch (error) {
       console.warn(`[Butterfly Diary] 读取聊天变量「${variableName}」失败`, error);
@@ -441,7 +517,7 @@ window.ButterflyDiaryData = (() => {
     const stApi = getSTAPI();
     const currentChatId = getCurrentChatId();
     if (!currentChatId || (expectedChatId && currentChatId !== expectedChatId) || typeof stApi?.variables?.get !== 'function') {
-      setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+      setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', summary: '', source: 'default', dispatch: true });
       return {
         ok: false,
         persisted: false,
@@ -451,26 +527,35 @@ window.ButterflyDiaryData = (() => {
       };
     }
 
-    const variableNames = [DIARY_VARIABLE_NAME, ...LEGACY_DIARY_VARIABLE_NAMES];
-    for (const variableName of variableNames) {
+    const prioritizedVariableNames = [
+      DIARY_HISTORY_VARIABLE_NAME,
+      DIARY_VARIABLE_NAME,
+      ...LEGACY_DIARY_VARIABLE_NAMES,
+    ];
+
+    for (const variableName of prioritizedVariableNames) {
       const loadedValue = await tryLoadDiaryVariableValue(stApi, variableName);
       if (!loadedValue) {
         continue;
       }
 
       if (loadedValue.parsedEntries.length) {
+        const nextSource = variableName === DIARY_HISTORY_VARIABLE_NAME
+          ? 'chat_history_variable'
+          : (variableName === DIARY_VARIABLE_NAME ? 'chat_latest_variable' : 'legacy_chat_variable');
         setRuntimeDiaryEntries(loadedValue.parsedEntries, {
           rawValue: loadedValue.serializedRawValue,
-          source: variableName === DIARY_VARIABLE_NAME ? 'chat_variable' : 'legacy_chat_variable',
+          summary: loadedValue.summary,
+          source: nextSource,
           dispatch: true,
         });
       } else {
-        setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+        setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', summary: '', source: 'default', dispatch: true });
       }
 
       return {
         ok: true,
-        persisted: variableName === DIARY_VARIABLE_NAME,
+        persisted: variableName === DIARY_HISTORY_VARIABLE_NAME || variableName === DIARY_VARIABLE_NAME,
         variableName,
         entries: getDiaryEntries(),
         rawValue: getDiaryRawValue(),
@@ -478,7 +563,7 @@ window.ButterflyDiaryData = (() => {
       };
     }
 
-    setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', source: 'default', dispatch: true });
+    setRuntimeDiaryEntries(defaultDiaryEntries, { rawValue: '', summary: '', source: 'default', dispatch: true });
     return {
       ok: true,
       persisted: false,
@@ -488,12 +573,20 @@ window.ButterflyDiaryData = (() => {
     };
   }
 
-  async function saveDiaryValueToChatVariable(rawValue, { expectedChatId = '', source = 'chat_variable', mergeMode = 'replace' } = {}) {
+  async function saveDiaryValueToChatVariable(rawValue, {
+    expectedChatId = '',
+    source = 'chat_variable',
+    mergeMode = 'append',
+    updateLatest = true,
+    updateHistory = true,
+    historyMergeMode = '',
+    summary = '',
+  } = {}) {
     const serializedRawValue = typeof rawValue === 'string'
       ? rawValue
       : JSON.stringify(rawValue ?? '', null, 2);
     const parsedEntries = parseDiaryVariableValue(serializedRawValue);
-    const nextEntries = parsedEntries.length
+    const latestEntries = parsedEntries.length
       ? parsedEntries
       : normalizeDiaryEntries([
         {
@@ -502,64 +595,124 @@ window.ButterflyDiaryData = (() => {
         },
       ], { fallbackTitlePrefix: '最新日记' });
 
-    const normalizedMergeMode = String(mergeMode || '').trim() === 'append' ? 'append' : 'replace';
-    const incomingStructuredEntries = normalizeStructuredDiaryPayloadEntries(nextEntries);
-    const baseStructuredEntries = normalizedMergeMode === 'append'
-      ? normalizeStructuredDiaryPayloadEntries(runtimeDiaryEntries)
-      : [];
-    const finalStructuredEntries = normalizedMergeMode === 'append'
-      ? baseStructuredEntries.concat(incomingStructuredEntries).slice(-200)
-      : (incomingStructuredEntries.length ? incomingStructuredEntries : normalizeStructuredDiaryPayloadEntries(nextEntries));
-    const finalRawValue = finalStructuredEntries.length
-      ? serializeStructuredDiaryPayloadEntries(finalStructuredEntries)
-      : serializedRawValue;
-    const finalEntries = normalizeDiaryEntries(finalStructuredEntries.length ? finalStructuredEntries : nextEntries, { fallbackTitlePrefix: '日记' });
+    const latestStructuredEntries = normalizeStructuredDiaryPayloadEntries(latestEntries);
+    const resolvedSummary = pickFirstNonEmptyString([summary, extractDiarySummaryFromRawValue(rawValue)]);
+    const latestRawValue = serializeDiaryVariablePayload({
+      summary: resolvedSummary,
+      entries: latestStructuredEntries.length ? latestStructuredEntries : latestEntries,
+    });
+    const latestDisplayEntries = normalizeDiaryEntries(latestStructuredEntries.length ? latestStructuredEntries : latestEntries, { fallbackTitlePrefix: '最新日记' });
 
-    let persisted = false;
+    const shouldUpdateLatest = updateLatest !== false;
+    const shouldUpdateHistory = updateHistory !== false;
+    const normalizedHistoryMergeMode = String(historyMergeMode || mergeMode || '').trim() === 'replace' ? 'replace' : 'append';
+
+    let persistedLatest = false;
+    let persistedHistory = false;
+    let historyStructuredEntries = [];
+    let baseHistoryStructuredEntries = normalizeStructuredDiaryPayloadEntries(runtimeDiaryEntries);
     const stApi = getSTAPI();
     const currentChatId = getCurrentChatId();
+
     if (currentChatId && (!expectedChatId || currentChatId === expectedChatId) && typeof stApi?.variables?.set === 'function') {
       try {
-        const result = await stApi.variables.set({
-          name: DIARY_VARIABLE_NAME,
-          scope: 'local',
-          value: finalRawValue,
-        });
-        persisted = result?.ok !== false;
+        const historyBaseLoaded = await tryLoadDiaryVariableValue(stApi, DIARY_HISTORY_VARIABLE_NAME);
+        const legacyBaseLoaded = historyBaseLoaded ? null : await tryLoadDiaryVariableValue(stApi, 'butterfly_journal');
+        const baseHistoryEntries = historyBaseLoaded?.parsedEntries?.length
+          ? historyBaseLoaded.parsedEntries
+          : (legacyBaseLoaded?.parsedEntries?.length ? legacyBaseLoaded.parsedEntries : runtimeDiaryEntries);
+        baseHistoryStructuredEntries = normalizeStructuredDiaryPayloadEntries(baseHistoryEntries);
+      } catch (error) {}
 
-        if (persisted && typeof stApi?.variables?.delete === 'function') {
-          for (const legacyVariableName of LEGACY_DIARY_VARIABLE_NAMES) {
-            try {
-              await stApi.variables.delete({
-                name: legacyVariableName,
-                scope: 'local',
-              });
-            } catch (error) {}
-          }
+      if (shouldUpdateLatest) {
+        try {
+          const latestResult = await stApi.variables.set({
+            name: DIARY_VARIABLE_NAME,
+            scope: 'local',
+            value: latestRawValue,
+          });
+          persistedLatest = latestResult?.ok !== false;
+        } catch (error) {
+          console.warn(`[Butterfly Diary] 写入聊天变量「${DIARY_VARIABLE_NAME}」失败`, error);
         }
-      } catch (error) {
-        console.warn(`[Butterfly Diary] 写入聊天变量「${DIARY_VARIABLE_NAME}」失败`, error);
+      }
+
+      if (shouldUpdateHistory) {
+        try {
+          historyStructuredEntries = normalizedHistoryMergeMode === 'replace'
+            ? latestStructuredEntries.slice(0, 200)
+            : baseHistoryStructuredEntries.concat(latestStructuredEntries).slice(-200);
+          const historyRawValue = serializeDiaryVariablePayload({
+            summary: resolvedSummary,
+            entries: historyStructuredEntries.length ? historyStructuredEntries : latestStructuredEntries,
+          });
+
+          const historyResult = await stApi.variables.set({
+            name: DIARY_HISTORY_VARIABLE_NAME,
+            scope: 'local',
+            value: historyRawValue,
+          });
+          persistedHistory = historyResult?.ok !== false;
+
+          if (persistedHistory && typeof stApi?.variables?.delete === 'function') {
+            for (const legacyVariableName of LEGACY_DIARY_VARIABLE_NAMES) {
+              try {
+                await stApi.variables.delete({
+                  name: legacyVariableName,
+                  scope: 'local',
+                });
+              } catch (error) {}
+            }
+          }
+        } catch (error) {
+          console.warn(`[Butterfly Diary] 写入聊天变量「${DIARY_HISTORY_VARIABLE_NAME}」失败`, error);
+        }
       }
     }
 
-    setRuntimeDiaryEntries(finalEntries, {
-      rawValue: finalRawValue,
-      source: persisted ? source : `${source}_runtime`,
+    const effectiveStructuredEntries = shouldUpdateHistory
+      ? historyStructuredEntries
+      : (baseHistoryStructuredEntries.length ? baseHistoryStructuredEntries : latestStructuredEntries);
+    const runtimeEntries = normalizeDiaryEntries(
+      effectiveStructuredEntries.length ? effectiveStructuredEntries : latestDisplayEntries,
+      { fallbackTitlePrefix: '日记' }
+    );
+    const runtimeRawValue = serializeDiaryVariablePayload({
+      summary: resolvedSummary,
+      entries: effectiveStructuredEntries.length ? effectiveStructuredEntries : latestStructuredEntries,
+    });
+
+    setRuntimeDiaryEntries(runtimeEntries, {
+      rawValue: runtimeRawValue,
+      summary: resolvedSummary,
+      source: shouldUpdateHistory
+        ? (persistedHistory ? `${source}_history` : `${source}_runtime`)
+        : (persistedLatest ? `${source}_latest_only` : `${source}_runtime`),
       dispatch: true,
     });
 
     return {
       ok: true,
-      persisted,
+      persisted: persistedLatest || persistedHistory,
+      persistedLatest,
+      persistedHistory,
+      latestVariableName: DIARY_VARIABLE_NAME,
+      historyVariableName: DIARY_HISTORY_VARIABLE_NAME,
+      updateLatest: shouldUpdateLatest,
+      updateHistory: shouldUpdateHistory,
+      historyMergeMode: normalizedHistoryMergeMode,
+      summary: getDiarySummary(),
       entries: getDiaryEntries(),
       rawValue: getDiaryRawValue(),
       source: runtimeDiarySource,
-      mergeMode: normalizedMergeMode,
+      mergeMode: normalizedHistoryMergeMode,
     };
   }
 
   const api = {
     DIARY_VARIABLE_NAME,
+    DIARY_HISTORY_VARIABLE_NAME,
+    DIARY_SUMMARY_TAG_NAME,
     LEGACY_DIARY_VARIABLE_NAMES,
     normalizeGeneratedDiaryJsonValue,
     normalizeStructuredDiaryPayloadEntries,
@@ -567,9 +720,11 @@ window.ButterflyDiaryData = (() => {
     defaultDiaryEntries: normalizeDiaryEntries(defaultDiaryEntries, { fallbackTitlePrefix: '校园日记' }),
     diaryEntries: getDiaryEntries(),
     rawDiaryValue: runtimeDiaryRawValue,
+    summary: runtimeDiarySummary,
     source: runtimeDiarySource,
     getDiaryEntries,
     getDiaryRawValue,
+    getDiarySummary,
     getDiaryTextForPrompt,
     diaryEntriesToText,
     normalizeDiaryEntries,

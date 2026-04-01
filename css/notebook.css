@@ -269,6 +269,22 @@
   mix-blend-mode: multiply;
 }
 
+.notebook-front .butterfly-container,
+.notebook-front-back .butterfly-container,
+.notebook-inner-page .butterfly-container,
+.notebook-inner-page-back .butterfly-container,
+.settings-page-surface .butterfly-container {
+  z-index: 40;
+}
+
+.notebook-front .butterfly,
+.notebook-front-back .butterfly,
+.notebook-inner-page .butterfly,
+.settings-page-surface .butterfly,
+.binding {
+  z-index: 40;
+}
+
 /* 封皮背面（翻开后看到的页面） */
 .notebook-front-back {
   position: absolute;

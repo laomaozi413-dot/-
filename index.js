@@ -59,6 +59,10 @@ function getCurrentScale(modal) {
     return Number.isFinite(value) ? value : DEFAULT_SCALE;
 }
 
+function getFrame(modal) {
+    return modal?.querySelector('[data-role="frame"]') ?? null;
+}
+
 function setModalPosition(modal, left, top, { persist = true } = {}) {
     modal.style.left = `${left}px`;
     modal.style.top = `${top}px`;
@@ -79,10 +83,12 @@ function clampModalPosition(modal, { persist = true } = {}) {
     }
 
     const rect = modal.getBoundingClientRect();
+    const minLeft = Math.min(0, window.innerWidth - rect.width);
     const maxLeft = Math.max(0, window.innerWidth - rect.width);
+    const minTop = Math.min(0, window.innerHeight - rect.height);
     const maxTop = Math.max(0, window.innerHeight - rect.height);
-    const left = clamp(rect.left, 0, maxLeft);
-    const top = clamp(rect.top, 0, maxTop);
+    const left = clamp(rect.left, minLeft, maxLeft);
+    const top = clamp(rect.top, minTop, maxTop);
     setModalPosition(modal, left, top, { persist });
 }
 
@@ -189,73 +195,114 @@ function closeModal() {
     modal.classList.add('is-hidden');
 }
 
+function getFramePoint(frame, clientX, clientY) {
+    const frameRect = frame.getBoundingClientRect();
+    return {
+        x: frameRect.left + clientX,
+        y: frameRect.top + clientY,
+    };
+}
+
 function bindFrameInteractions(modal) {
-    const frame = modal.querySelector('[data-role="frame"]');
+    const frame = getFrame(modal);
     if (!frame || frame.dataset.hostBound === 'true') {
         return;
     }
 
-    frame.dataset.hostBound = 'true';
+    const install = () => {
+        const doc = frame.contentDocument;
+        if (!doc || frame.dataset.gestureBound === 'true') {
+            return;
+        }
 
-    const dragState = {
-        active: false,
-        startX: 0,
-        startY: 0,
-        startLeft: 0,
-        startTop: 0,
+        frame.dataset.gestureBound = 'true';
+
+        const gestureState = {
+            dragging: false,
+            pointerId: null,
+            startX: 0,
+            startY: 0,
+            startLeft: 0,
+            startTop: 0,
+        };
+
+        const finishPointerDrag = (event) => {
+            if (!gestureState.dragging || gestureState.pointerId !== event.pointerId) {
+                return;
+            }
+
+            gestureState.dragging = false;
+            gestureState.pointerId = null;
+            const rect = modal.getBoundingClientRect();
+            setModalPosition(modal, rect.left, rect.top, { persist: true });
+        };
+
+        doc.addEventListener('wheel', (event) => {
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+
+            event.preventDefault();
+            const anchor = getFramePoint(frame, event.clientX, event.clientY);
+            const delta = event.deltaY < 0 ? SCALE_STEP : -SCALE_STEP;
+            setModalScale(modal, getCurrentScale(modal) + delta, {
+                persist: true,
+                anchorX: anchor.x,
+                anchorY: anchor.y,
+                clampPosition: true,
+            });
+        }, { passive: false });
+
+        doc.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+        }, { capture: true });
+
+        doc.addEventListener('pointerdown', (event) => {
+            if (event.button !== 2) {
+                return;
+            }
+
+            const point = getFramePoint(frame, event.clientX, event.clientY);
+            const rect = modal.getBoundingClientRect();
+            gestureState.dragging = true;
+            gestureState.pointerId = event.pointerId;
+            gestureState.startX = point.x;
+            gestureState.startY = point.y;
+            gestureState.startLeft = rect.left;
+            gestureState.startTop = rect.top;
+
+            try {
+                event.target?.setPointerCapture?.(event.pointerId);
+            } catch {
+                // ignore
+            }
+
+            event.preventDefault();
+        }, { passive: false, capture: true });
+
+        doc.addEventListener('pointermove', (event) => {
+            if (!gestureState.dragging || gestureState.pointerId !== event.pointerId) {
+                return;
+            }
+
+            const point = getFramePoint(frame, event.clientX, event.clientY);
+            const deltaX = point.x - gestureState.startX;
+            const deltaY = point.y - gestureState.startY;
+            setModalPosition(modal, gestureState.startLeft + deltaX, gestureState.startTop + deltaY, { persist: false });
+            event.preventDefault();
+        }, { passive: false, capture: true });
+
+        doc.addEventListener('pointerup', finishPointerDrag, { capture: true });
+        doc.addEventListener('pointercancel', finishPointerDrag, { capture: true });
     };
 
-    modal.addEventListener('mousedown', (event) => {
-        if (event.button !== 2) {
-            return;
-        }
-
-        const rect = modal.getBoundingClientRect();
-        dragState.active = true;
-        dragState.startX = event.clientX;
-        dragState.startY = event.clientY;
-        dragState.startLeft = rect.left;
-        dragState.startTop = rect.top;
-        event.preventDefault();
+    frame.addEventListener('load', () => {
+        frame.dataset.gestureBound = 'false';
+        install();
     });
 
-    window.addEventListener('mousemove', (event) => {
-        if (!dragState.active) {
-            return;
-        }
-
-        const nextLeft = dragState.startLeft + (event.clientX - dragState.startX);
-        const nextTop = dragState.startTop + (event.clientY - dragState.startY);
-        setModalPosition(modal, nextLeft, nextTop, { persist: false });
-    });
-
-    window.addEventListener('mouseup', () => {
-        if (!dragState.active) {
-            return;
-        }
-
-        dragState.active = false;
-        clampModalPosition(modal, { persist: true });
-    });
-
-    modal.addEventListener('contextmenu', (event) => {
-        event.preventDefault();
-    });
-
-    modal.addEventListener('wheel', (event) => {
-        if (!(event.ctrlKey || event.metaKey)) {
-            return;
-        }
-
-        event.preventDefault();
-        const delta = event.deltaY < 0 ? SCALE_STEP : -SCALE_STEP;
-        setModalScale(modal, getCurrentScale(modal) + delta, {
-            persist: true,
-            anchorX: event.clientX,
-            anchorY: event.clientY,
-            clampPosition: true,
-        });
-    }, { passive: false });
+    frame.dataset.hostBound = 'true';
+    install();
 }
 
 function ensureModal() {
