@@ -1,16 +1,16 @@
 window.ButterflyDiaryPagination = {
-  createTextLayout({ lineCount, lineHeight, pageWidth, blockedRects }) {
+  createTextLayout({ lineCount, lineHeight, pageWidth, blockedRects, defaultBlockedRects = blockedRects }) {
     function intersectsLine(rect, top, height) {
       const bottom = top + height;
       return rect.y < bottom && rect.y + rect.height > top;
     }
 
-    function getLineLayout(index) {
+    function getLineLayoutForBlockedRects(index, activeBlockedRects = blockedRects) {
       const top = index * lineHeight;
       let leftInset = 0;
       let rightInset = 0;
 
-      blockedRects.forEach((rect) => {
+      (Array.isArray(activeBlockedRects) ? activeBlockedRects : []).forEach((rect) => {
         if (!intersectsLine(rect, top, lineHeight)) {
           return;
         }
@@ -34,6 +34,10 @@ window.ButterflyDiaryPagination = {
       };
     }
 
+    function getLineLayout(index) {
+      return getLineLayoutForBlockedRects(index, blockedRects);
+    }
+
     function getPlainText(el) {
       return (el.textContent || '').replace(/\n/g, '');
     }
@@ -51,18 +55,28 @@ window.ButterflyDiaryPagination = {
         return ['', ''];
       }
 
-      setPlainText(line, text);
-      if (fits(line)) {
-        return [text, ''];
+      const normalizedText = String(text || '');
+      const newlineIndex = normalizedText.indexOf('\n');
+      if (newlineIndex === 0) {
+        return ['', normalizedText.slice(1)];
+      }
+
+      const measureText = newlineIndex > 0 ? normalizedText.slice(0, newlineIndex) : normalizedText;
+      setPlainText(line, measureText);
+      if (fits(line) && newlineIndex > 0) {
+        return [measureText, normalizedText.slice(newlineIndex + 1)];
+      }
+      if (fits(line) && newlineIndex < 0) {
+        return [normalizedText, ''];
       }
 
       let low = 0;
-      let high = text.length;
+      let high = measureText.length;
       let best = '';
 
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
-        const candidate = text.slice(0, mid);
+        const candidate = measureText.slice(0, mid);
         setPlainText(line, candidate);
 
         if (fits(line)) {
@@ -73,12 +87,62 @@ window.ButterflyDiaryPagination = {
         }
       }
 
-      if (!best && text.length) {
-        best = text.charAt(0);
+      if (!best && measureText.length) {
+        best = measureText.charAt(0);
       }
 
-      return [best, text.slice(best.length)];
+      return [best, normalizedText.slice(best.length)];
     }
+
+    function splitIntoNotebookParagraphs(text = '') {
+      return String(text || '')
+        .replace(/\r\n?/g, '\n')
+        .split(/\n+/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean)
+        .map((paragraph) => `　　${paragraph}`);
+    }
+
+    function fillLinesFromParagraphs(lines, paragraphs = []) {
+      const pageLineTexts = [];
+      let paragraphIndex = 0;
+      let paragraphRemaining = paragraphs[0] || '';
+
+      for (const line of lines) {
+        if (line.dataset.writeable !== 'true') {
+          pageLineTexts.push('');
+          continue;
+        }
+
+        while (!paragraphRemaining && paragraphIndex < paragraphs.length - 1) {
+          paragraphIndex += 1;
+          paragraphRemaining = paragraphs[paragraphIndex] || '';
+        }
+
+        if (!paragraphRemaining) {
+          pageLineTexts.push('');
+          setPlainText(line, '');
+          continue;
+        }
+
+        const [fitText, overflow] = splitToFit(line, paragraphRemaining);
+        pageLineTexts.push(fitText);
+        paragraphRemaining = overflow;
+
+        if (!paragraphRemaining) {
+          paragraphIndex += 1;
+          paragraphRemaining = paragraphs[paragraphIndex] || '';
+        }
+      }
+
+      return {
+        pageText: pageLineTexts.join('\n'),
+        remainingParagraphs: paragraphRemaining
+          ? [paragraphRemaining, ...paragraphs.slice(paragraphIndex + 1)]
+          : paragraphs.slice(paragraphIndex),
+      };
+    }
+
 
     function findNearestWritable(lines, index, direction) {
       let i = index + direction;
@@ -91,7 +155,7 @@ window.ButterflyDiaryPagination = {
       return null;
     }
 
-    function paginateEntries(entries) {
+    function createTempWritingArea(customBlockedRects = defaultBlockedRects) {
       const tempWritingArea = document.createElement('div');
       tempWritingArea.className = 'writing-area';
       tempWritingArea.style.left = '-9999px';
@@ -101,7 +165,7 @@ window.ButterflyDiaryPagination = {
 
       const tempLines = [];
       for (let i = 0; i < lineCount; i++) {
-        const layout = getLineLayout(i);
+        const layout = getLineLayoutForBlockedRects(i, customBlockedRects);
         const line = document.createElement('div');
         line.className = 'writing-line';
         line.dataset.writeable = layout.width > 24 ? 'true' : 'false';
@@ -112,33 +176,81 @@ window.ButterflyDiaryPagination = {
         tempLines.push(line);
       }
 
-      document.body.appendChild(tempWritingArea);
+      return { tempWritingArea, tempLines };
+    }
+
+    function paginateEntries(entries, { infoBlockedRects = [] } = {}) {
       const contentPages = [];
+      const normalizedInfoBlockedRects = Array.isArray(infoBlockedRects) ? infoBlockedRects : [];
 
-      entries.forEach((entry) => {
-        const fullText = `${entry.title}：${entry.content}`;
-        let remainingText = fullText.trim();
+      entries.forEach((entry, entryIndex) => {
+        const structuredData = entry?.structuredData && typeof entry.structuredData === 'object'
+          ? entry.structuredData
+          : null;
+        const fullText = `${entry?.title || ''}：${entry?.content || ''}`.trim();
+        const bodyParagraphs = structuredData && typeof structuredData['日记内容'] === 'string' && structuredData['日记内容'].trim()
+          ? splitIntoNotebookParagraphs(structuredData['日记内容'])
+          : splitIntoNotebookParagraphs(fullText);
+        const shouldShowInfoPanel = !!(structuredData && [
+          structuredData['日期'],
+          structuredData['天气'],
+          structuredData['心情'],
+        ].some((value) => typeof value === 'string' && value.trim()));
+        const hasIllustration = !!(structuredData && typeof structuredData['配图文本'] === 'string' && structuredData['配图文本'].trim());
 
-        while (remainingText) {
-          let pageText = '';
-          for (const line of tempLines) {
-            if (line.dataset.writeable !== 'true') {
-              continue;
-            }
+        let remainingParagraphs = bodyParagraphs.length ? bodyParagraphs.slice() : (fullText ? [`　　${fullText}`] : []);
+        let isFirstPageOfEntry = true;
 
-            const [fitText, overflow] = splitToFit(line, remainingText);
-            pageText += fitText;
-            remainingText = overflow;
-            if (!remainingText) {
-              break;
-            }
-          }
-          contentPages.push(pageText);
+        while (remainingParagraphs.length) {
+          const activeBlockedRects = shouldShowInfoPanel && isFirstPageOfEntry
+            ? defaultBlockedRects.concat(normalizedInfoBlockedRects)
+            : defaultBlockedRects;
+          const { tempWritingArea, tempLines } = createTempWritingArea(activeBlockedRects);
+          document.body.appendChild(tempWritingArea);
+
+          const { pageText, remainingParagraphs: nextRemainingParagraphs } = fillLinesFromParagraphs(tempLines, remainingParagraphs);
+
+          document.body.removeChild(tempWritingArea);
+          contentPages.push({
+            text: pageText,
+            entry,
+            entryIndex,
+            showInfoPanel: shouldShowInfoPanel && isFirstPageOfEntry,
+            showIllustrationPanel: false,
+          });
+          remainingParagraphs = nextRemainingParagraphs;
+          isFirstPageOfEntry = false;
+        }
+
+        if (hasIllustration) {
+          contentPages.push({
+            text: '',
+            entry,
+            entryIndex,
+            showInfoPanel: false,
+            showIllustrationPanel: true,
+          });
         }
       });
 
-      document.body.removeChild(tempWritingArea);
-      return contentPages.length ? contentPages : [''];
+      return contentPages.length
+        ? contentPages
+        : [{ text: '', entry: null, entryIndex: -1, showInfoPanel: false, showIllustrationPanel: false }];
+    }
+
+    function applyPageLineLayout(page, activeBlockedRects = blockedRects) {
+      const lines = Array.isArray(page?.lines) ? page.lines : [];
+      lines.forEach((line, index) => {
+        const layout = getLineLayoutForBlockedRects(index, activeBlockedRects);
+        line.dataset.writeable = layout.width > 24 ? 'true' : 'false';
+        line.style.top = `${index * lineHeight}px`;
+        line.style.left = `${layout.left}px`;
+        line.style.width = `${layout.width}px`;
+        line.classList.toggle('blocked', layout.width <= 24);
+        if (layout.width <= 24) {
+          setPlainText(line, '');
+        }
+      });
     }
 
     function normalizePage(page, startIndex = 0) {
@@ -162,42 +274,13 @@ window.ButterflyDiaryPagination = {
         }
       }
 
-      for (let i = 0; i < lines.length - 1; i++) {
-        const current = lines[i];
-        if (current.dataset.writeable !== 'true') {
-          continue;
-        }
-
-        const next = findNearestWritable(lines, i, 1);
-        if (!next) {
-          break;
-        }
-
-        let currentText = getPlainText(current);
-        let nextText = getPlainText(next);
-        if (!nextText) {
-          continue;
-        }
-
-        while (nextText) {
-          const attempt = currentText + nextText.charAt(0);
-          setPlainText(current, attempt);
-          if (fits(current)) {
-            currentText = attempt;
-            nextText = nextText.slice(1);
-            setPlainText(next, nextText);
-          } else {
-            setPlainText(current, currentText);
-            break;
-          }
-        }
-      }
     }
 
     function distributeText(page, fullText) {
       let remainingText = fullText;
       page.lines.forEach((line) => {
         if (line.dataset.writeable !== 'true') {
+          setPlainText(line, '');
           return;
         }
 
@@ -214,6 +297,8 @@ window.ButterflyDiaryPagination = {
 
     return {
       getLineLayout,
+      getLineLayoutForBlockedRects,
+      applyPageLineLayout,
       paginateEntries,
       normalizePage,
       distributeText,

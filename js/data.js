@@ -4,48 +4,7 @@ window.ButterflyDiaryData = (() => {
   const LEGACY_DIARY_VARIABLE_NAMES = ['butterfly_journal', '日记'];
   const DIARY_SUMMARY_TAG_NAME = 'diary_summary';
 
-  const defaultDiaryEntries = [
-    {
-      title: '第一则校园日记',
-      content: '今天是周一，早上升旗的时候阳光特别亮，照得操场像铺了一层金色的薄纱。第一节是语文课，老师讲《背影》，读到父亲翻越月台那一段时，教室里突然安静下来，我也想起爸爸每天早起送我上学的样子。课间我和同桌去小卖部买了牛奶面包，回来的路上看见花坛边停着一只白色的小蝴蝶，扑闪扑闪地绕着灌木飞，像在偷偷听我们讲话。',
-    },
-    {
-      title: '第二则校园日记',
-      content: '今天数学小测有一道题我一开始完全没有思路，手心都紧张得有点出汗。后来我深呼吸，把老师昨天讲过的辅助线方法重新想了一遍，竟然真的做出来了。中午在食堂吃了番茄鸡蛋和土豆丝，味道比平时好很多。午休时窗外一直有风，吹得窗帘轻轻晃动，连写作业的心情也变得安静下来。原来校园里最舒服的时候，不一定是下课疯跑，而是这样平平淡淡的一小段时光。',
-    },
-    {
-      title: '第三则校园日记',
-      content: '下午的体育课我们练习接力跑，刚开始大家总是掉棒，后来一遍一遍磨合，终于跑得顺了起来。轮到我冲刺的时候，耳边全是同学们的加油声，虽然最后只拿了第二名，但那一瞬间真的觉得自己跑得像风一样快。放学前，班主任发下了上周的周记本，她在我的那一页旁边写了“观察很细腻，要继续保持”，看到这句话的时候，我偷偷开心了很久。',
-    },
-    {
-      title: '第四则校园日记',
-      content: '今天下了一场短短的阵雨，教学楼前的地面被洗得发亮，树叶颜色也比平时更深。晚自习前的天空居然出现了一点淡淡的晚霞，透过走廊玻璃看过去很好看。英语课上我鼓起勇气举手回答问题，虽然有个单词念得不太准，但老师还是朝我点了点头。以前总怕自己说错，现在慢慢觉得，愿意开口本身就已经是一种进步了。也许成长就是一次次不太完美地向前走。',
-    },
-    {
-      title: '第五则校园日记',
-      content: '这一周过得很快，转眼就到了周五。最后一节班会课，老师让我们写下最近最感谢的一件小事。我写的是：感谢前桌借给我修正带，感谢朋友在我心情不好的时候陪我去操场走了一圈，也感谢傍晚教室里那束刚好落在课桌上的夕阳。回家的路上，我背着书包经过校门，突然觉得校园日常虽然普通，却藏着很多会发光的小瞬间。以后我要把这些时刻都认真记下来。',
-    },
-    {
-      title: '第六则校园日记',
-      content: '周末早晨醒得特别早，看到阳光透过窗帘缝隙洒进来，心情意外地好。本来想接着睡，但还是起来把书桌整理了一遍。我发现上周用完的笔芯居然有五六根，原来不知不觉间写了这么多字。下午去了趟图书馆，在自习室靠窗的位置看了一下午书，中间抬头发呆时，看到一只小鸟停在外面的树枝上梳理羽毛，感觉整个世界都很安静。',
-    },
-    {
-      title: '第七则校园日记',
-      content: '今天是新的一周，大家似乎都有点没睡醒，早读课的声音比平时小很多。不过英语老师一进来，那干练的脚步声瞬间就把大家叫醒了。上午发了期中考的成绩单，虽然不是特别拔尖，但比上次进步了十几名，尤其是我最头疼的物理居然及格了！下课后我去办公室问问题，老师笑着拍了拍我的肩膀，那一刻我觉得以前的努力都没有白费。',
-    },
-    {
-      title: '第八则校园日记',
-      content: '天阴沉沉的，下午第一节课的时候突然下起了暴雨，豆大的雨点砸在玻璃上劈里啪啦响。教室里因为光线太暗提前开了灯。这种天气坐在明亮的教室里上课，反而有一种很特别的安全感。放学时雨还没停，我和朋友撑着伞在水坑里小心翼翼地走，结果一辆自行车飞快过去溅了我们一身水，我们没生气，反而看着对方狼狈的样子笑了一路。',
-    },
-    {
-      title: '第九则校园日记',
-      content: '今天轮到我值日，放学后留在教室扫地擦黑板。看着原本杂乱的教室一点点变得整洁，感觉心里也跟着变得敞亮起来。等我做完值日准备回家时，教学楼里已经没多少人了。走廊的尽头是被夕阳染红的天空，空气里有一种好闻的粉笔灰和雨后泥土混合的味道。我突然觉得，能在这样平静的日子里长大，其实是一件很幸运的事。',
-    },
-    {
-      title: '第十则校园日记',
-      content: '最近在听一首老歌，旋律非常舒缓，今天一整天都在脑海里单曲循环。中午吃完饭，和同桌在操场看了一会儿学长们打篮球。后来我们聊起了以后的梦想，她说想当个插画师，我说我还没想好，但希望能做一件让自己觉得开心和有意义的事。其实未来到底什么样谁也不知道，但只要每天都比昨天更好一点点，总会走到想去的地方吧。',
-    },
-  ];
+  const defaultDiaryEntries = [];
 
   function padNumber(value) {
     return String(value).padStart(2, '0');
@@ -84,6 +43,9 @@ window.ButterflyDiaryData = (() => {
       '心情',
       '配图文本',
       '日记内容',
+      '拍摄日期',
+      '拍摄地点',
+      '简略说明',
       'date',
       'weather',
       'mood',
@@ -94,6 +56,23 @@ window.ButterflyDiaryData = (() => {
       'diaryContent',
       'diary_content',
       'diaryText',
+      'photoDate',
+      'photo_date',
+      'captureDate',
+      'capture_date',
+      'shotDate',
+      'shot_date',
+      'photoLocation',
+      'photo_location',
+      'captureLocation',
+      'capture_location',
+      'location',
+      'place',
+      'photoSummary',
+      'photo_summary',
+      'captionSummary',
+      'caption_summary',
+      'brief',
     ].some((key) => typeof entry?.[key] === 'string' && entry[key].trim());
   }
 
@@ -108,9 +87,14 @@ window.ButterflyDiaryData = (() => {
       心情: pickFirstNonEmptyString([entry['心情'], entry.mood, entry.feeling, entry.emotion]),
       配图文本: pickFirstNonEmptyString([entry['配图文本'], entry.imageText, entry.image_text, entry.imagePrompt, entry.image_prompt, entry.caption]),
       日记内容: pickFirstNonEmptyString([entry['日记内容'], entry.diaryContent, entry.diary_content, entry.diaryText, entry.content, entry.text, entry.message, entry.body]),
+      拍摄日期: pickFirstNonEmptyString([entry['拍摄日期'], entry.photoDate, entry.photo_date, entry.captureDate, entry.capture_date, entry.shotDate, entry.shot_date])
+        || pickFirstNonEmptyString([entry['日期'], entry.date, entry.day, entry.createdAt])
+        || createGeneratedDiaryDateValue(),
+      拍摄地点: pickFirstNonEmptyString([entry['拍摄地点'], entry.photoLocation, entry.photo_location, entry.captureLocation, entry.capture_location, entry.location, entry.place]),
+      简略说明: pickFirstNonEmptyString([entry['简略说明'], entry.photoSummary, entry.photo_summary, entry.captionSummary, entry.caption_summary, entry.brief, entry.summary]),
     };
 
-    const hasMeaningfulBody = [normalizedEntry.天气, normalizedEntry.心情, normalizedEntry.配图文本, normalizedEntry.日记内容]
+    const hasMeaningfulBody = [normalizedEntry.天气, normalizedEntry.心情, normalizedEntry.配图文本, normalizedEntry.日记内容, normalizedEntry.拍摄地点, normalizedEntry.简略说明]
       .some((value) => String(value || '').trim());
     if (!hasMeaningfulBody) {
       return null;
@@ -129,6 +113,9 @@ window.ButterflyDiaryData = (() => {
       content: [
         `天气：${structuredPayload['天气']}`,
         `心情：${structuredPayload['心情']}`,
+        `拍摄日期：${structuredPayload['拍摄日期']}`,
+        `拍摄地点：${structuredPayload['拍摄地点']}`,
+        `简略说明：${structuredPayload['简略说明']}`,
         `配图文本：${structuredPayload['配图文本']}`,
         `日记内容：${structuredPayload['日记内容']}`,
       ].join('\n'),
@@ -152,6 +139,9 @@ window.ButterflyDiaryData = (() => {
         心情: '',
         配图文本: '',
         日记内容: normalizedText,
+        拍摄日期: createGeneratedDiaryDateValue(),
+        拍摄地点: '',
+        简略说明: '',
       };
     }
 
@@ -171,6 +161,9 @@ window.ButterflyDiaryData = (() => {
       心情: '',
       配图文本: '',
       日记内容: content || title,
+      拍摄日期: /^\d{4}-\d{2}-\d{2}/.test(title) ? title : createGeneratedDiaryDateValue(),
+      拍摄地点: '',
+      简略说明: '',
     };
   }
 

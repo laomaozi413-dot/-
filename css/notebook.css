@@ -126,6 +126,15 @@
   mix-blend-mode: multiply;
 }
 
+.notebook-inner-page.has-entry-info-panel {
+  background-size: calc(100% - 60px) 468px;
+  background-position: center 40px;
+}
+
+.notebook-inner-page.has-illustration-panel {
+  background-image: none;
+}
+
 @supports (-webkit-mask-composite: destination-out) {
   .notebook-inner-page {
     -webkit-mask-image:

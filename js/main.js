@@ -35,12 +35,16 @@
     { x: 8 - 30 - safety, y: 253 - 40 - safety, width: 42 + safety * 2, height: 40 + safety * 2 },
     { x: 334 - 30 - safety, y: 38 - 40 - safety, width: 42 + safety * 2, height: 44 + safety * 2 },
   ];
+  const diaryInfoPanelBlockedRects = [
+    { x: 0, y: 0, width: 336, height: 26 },
+  ];
 
-  const { getLineLayout, paginateEntries, normalizePage, distributeText } = createTextLayout({
+  const { getLineLayout, applyPageLineLayout, paginateEntries, normalizePage, distributeText } = createTextLayout({
     lineCount,
     lineHeight,
     pageWidth,
     blockedRects,
+    defaultBlockedRects: blockedRects,
   });
 
   let totalPageCount = 0;
@@ -81,13 +85,210 @@
     return Array.isArray(butterflyDiaryData?.diaryEntries) ? butterflyDiaryData.diaryEntries : [];
   }
 
-  function createPageText(pageNumber) {
-    return pageContents[pageNumber - 1] || '';
+  function createPageContent(pageNumber) {
+    return pageContents[pageNumber - 1] || { text: '', entry: null, showInfoPanel: false, showIllustrationPanel: false };
+  }
+
+  function getChineseWeekdayLabel(dateText = '') {
+    const normalized = String(dateText || '').trim();
+    const matched = normalized.match(/^(\d{4})[-年](\d{1,2})[-月](\d{1,2})/);
+    if (!matched) return '';
+    const year = Number(matched[1]);
+    const month = Number(matched[2]);
+    const day = Number(matched[3]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return '';
+    const date = new Date(year, month - 1, day);
+    if (Number.isNaN(date.getTime())) return '';
+    const labels = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    return labels[date.getDay()] || '';
+  }
+
+  function formatDiaryHeaderDateLine(dateText = '', weatherText = '') {
+    const normalizedDate = String(dateText || '').trim();
+    const normalizedWeather = String(weatherText || '').trim();
+    const dateParts = normalizedDate.match(/^(\d{4})[-年](\d{1,2})[-月](\d{1,2})/);
+    const formattedDate = dateParts
+      ? `${Number(dateParts[1])}年${Number(dateParts[2])}月${Number(dateParts[3])}日`
+      : normalizedDate;
+    const weekdayLabel = getChineseWeekdayLabel(normalizedDate);
+    return [formattedDate, weekdayLabel, normalizedWeather].filter(Boolean).join('，');
+  }
+
+  function formatPolaroidCompactDate(dateText = '') {
+    const normalizedDate = String(dateText || '').trim();
+    const dateParts = normalizedDate.match(/^(\d{4})[-年](\d{1,2})[-月](\d{1,2})/);
+    return dateParts
+      ? `${Number(dateParts[1])}.${Number(dateParts[2])}.${Number(dateParts[3])}`
+      : normalizedDate;
+  }
+
+  function formatPolaroidMetaLine(dateText = '', locationText = '') {
+    const compactDate = formatPolaroidCompactDate(dateText);
+    const normalizedLocation = String(locationText || '').trim();
+    return [compactDate, normalizedLocation].filter(Boolean).join(' ');
+  }
+
+  function formatPolaroidSummaryLine(summaryText = '') {
+    return String(summaryText || '').trim();
+  }
+
+  function applyPolaroidMetaAutoFit(page) {
+    const metaEl = page?.entryIllustrationMeta;
+    if (!metaEl) return;
+    metaEl.classList.remove('is-small', 'is-smaller');
+    const text = String(metaEl.textContent || '').trim();
+    if (!text) return;
+    if (metaEl.scrollWidth > metaEl.clientWidth + 1) {
+      metaEl.classList.add('is-small');
+    }
+    if (metaEl.scrollWidth > metaEl.clientWidth + 1) {
+      metaEl.classList.add('is-smaller');
+    }
+  }
+
+  function updatePolaroidScrollMaskState(page) {
+    const screen = page?.entryIllustrationScreen;
+    const content = page?.entryIllustrationScreenText;
+    if (!screen || !content) return;
+    const canScroll = content.scrollHeight > content.clientHeight + 2;
+    const atTop = content.scrollTop <= 2;
+    const atBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 2;
+    screen.classList.toggle('is-scrollable', canScroll);
+    screen.classList.toggle('is-at-top', atTop);
+    screen.classList.toggle('is-at-bottom', atBottom);
+  }
+
+  function bindPolaroidScrollInteractions(page) {
+    const screen = page?.entryIllustrationScreen;
+    const content = page?.entryIllustrationScreenText;
+    if (!screen || !content || content.dataset.scrollBound === 'true') return;
+    content.dataset.scrollBound = 'true';
+
+    let isDragging = false;
+    let startY = 0;
+    let startScrollTop = 0;
+
+    const stopDrag = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      content.classList.remove('is-dragging');
+    };
+
+    content.addEventListener('scroll', () => {
+      updatePolaroidScrollMaskState(page);
+    }, { passive: true });
+
+    content.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      isDragging = true;
+      startY = event.clientY;
+      startScrollTop = content.scrollTop;
+      content.classList.add('is-dragging');
+      event.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!isDragging) return;
+      const deltaY = event.clientY - startY;
+      content.scrollTop = startScrollTop - deltaY;
+      updatePolaroidScrollMaskState(page);
+      event.preventDefault();
+    });
+
+    window.addEventListener('mouseup', stopDrag);
+    window.addEventListener('mouseleave', stopDrag);
+
+    content.addEventListener('touchstart', (event) => {
+      const touch = event.touches?.[0];
+      if (!touch) return;
+      isDragging = true;
+      startY = touch.clientY;
+      startScrollTop = content.scrollTop;
+      content.classList.add('is-dragging');
+    }, { passive: true });
+
+    content.addEventListener('touchmove', (event) => {
+      if (!isDragging) return;
+      const touch = event.touches?.[0];
+      if (!touch) return;
+      const deltaY = touch.clientY - startY;
+      content.scrollTop = startScrollTop - deltaY;
+      updatePolaroidScrollMaskState(page);
+    }, { passive: true });
+
+    content.addEventListener('touchend', stopDrag, { passive: true });
+    content.addEventListener('touchcancel', stopDrag, { passive: true });
+  }
+
+  function applyPageEntryDecorations(page, pageContent = {}) {
+    if (!page?.entryInfoPanel) return;
+    const entry = pageContent?.entry;
+    const structuredData = entry?.structuredData && typeof entry.structuredData === 'object'
+      ? entry.structuredData
+      : null;
+    const shouldShowInfoPanel = !!(pageContent?.showInfoPanel && structuredData);
+    const shouldShowIllustrationPanel = !!(pageContent?.showIllustrationPanel && structuredData);
+    const activeBlockedRects = shouldShowInfoPanel
+      ? blockedRects.concat(diaryInfoPanelBlockedRects)
+      : blockedRects;
+
+    applyPageLineLayout?.(page, activeBlockedRects);
+
+    page.innerPage?.classList.toggle('has-entry-info-panel', shouldShowInfoPanel);
+    page.innerPage?.classList.toggle('has-illustration-panel', shouldShowIllustrationPanel);
+
+    page.entryInfoPanel.hidden = !shouldShowInfoPanel;
+    if (page.entryIllustrationPanel) {
+      page.entryIllustrationPanel.hidden = !shouldShowIllustrationPanel;
+    }
+
+    if (shouldShowInfoPanel) {
+      if (page.entryInfoLine) {
+        page.entryInfoLine.textContent = formatDiaryHeaderDateLine(
+          structuredData['日期'] || entry?.title || '',
+          structuredData['天气'] || ''
+        );
+      }
+    } else {
+      if (page.entryInfoLine) page.entryInfoLine.textContent = '';
+    }
+
+    if (shouldShowIllustrationPanel) {
+      if (page.entryIllustrationScreenText) {
+        page.entryIllustrationScreenText.textContent = String(structuredData['配图文本'] || '').trim() || '暂无配图描述';
+        page.entryIllustrationScreenText.scrollTop = 0;
+      }
+      if (page.entryIllustrationMeta) {
+        page.entryIllustrationMeta.textContent = formatPolaroidMetaLine(
+          structuredData['拍摄日期'] || structuredData['日期'] || '',
+          structuredData['拍摄地点'] || ''
+        );
+      }
+      if (page.entryIllustrationSummary) {
+        page.entryIllustrationSummary.textContent = formatPolaroidSummaryLine(structuredData['简略说明'] || '');
+      }
+      applyPolaroidMetaAutoFit(page);
+      bindPolaroidScrollInteractions(page);
+      requestAnimationFrame(() => updatePolaroidScrollMaskState(page));
+    } else {
+      if (page.entryIllustrationScreenText) {
+        page.entryIllustrationScreenText.textContent = '';
+        page.entryIllustrationScreenText.scrollTop = 0;
+      }
+      if (page.entryIllustrationMeta) {
+        page.entryIllustrationMeta.textContent = '';
+        page.entryIllustrationMeta.classList.remove('is-small', 'is-smaller');
+      }
+      if (page.entryIllustrationSummary) {
+        page.entryIllustrationSummary.textContent = '';
+      }
+      requestAnimationFrame(() => updatePolaroidScrollMaskState(page));
+    }
   }
 
   function rebuildDiaryPages(entriesSource = getDiaryEntries()) {
     const nextEntries = Array.isArray(entriesSource) ? entriesSource : [];
-    pageContents = paginateEntries(nextEntries);
+    pageContents = paginateEntries(nextEntries, { infoBlockedRects: diaryInfoPanelBlockedRects });
     totalPageCount = pageContents.length;
     backCoverPageIndex = totalPageCount;
 
@@ -100,8 +301,10 @@
 
     pages.forEach((page, index) => {
       const hasContentPage = index < totalPageCount;
+      const pageContent = hasContentPage ? createPageContent(index + 1) : { text: '', entry: null, showInfoPanel: false, showIllustrationPanel: false };
       page.wrapper.style.display = hasContentPage ? '' : 'none';
-      distributeText(page, hasContentPage ? createPageText(index + 1) : '');
+      applyPageEntryDecorations(page, pageContent);
+      distributeText(page, pageContent.text || '');
       normalizePage(page, 0);
       if (!hasContentPage) {
         page.wrapper.classList.remove('active', 'behind-page', 'flipped', 'unflipping', 'pre-return');
@@ -452,7 +655,9 @@
 
       pages.push(page);
       innerPagesHost.appendChild(page.wrapper);
-      distributeText(page, createPageText(page.pageNumber));
+      const pageContent = createPageContent(page.pageNumber);
+      applyPageEntryDecorations(page, pageContent);
+      distributeText(page, pageContent.text || '');
       normalizePage(page, 0);
     }
 

@@ -24,10 +24,25 @@ window.ButterflyDiaryPageFactory = {
           <img class="butterfly butterfly-menu-trigger" src="assets/butterfly15.png" style="left: 8px; top: 253px; width: 42px; height: 40px;" alt="">
           <img class="butterfly butterfly-turn-prev" src="assets/butterfly16.png" style="left: 334px; top: 38px; width: 42px; height: 44px;" alt="">
         </div>
+        <div class="diary-entry-info-panel" hidden>
+          <div class="diary-entry-info-line"></div>
+        </div>
+        <div class="diary-entry-illustration-panel" hidden>
+          <div class="diary-entry-polaroid-frame">
+            <div class="diary-entry-polaroid-screen">
+              <div class="diary-entry-polaroid-screen-text"></div>
+            </div>
+            <div class="diary-entry-polaroid-body">
+              <div class="diary-entry-polaroid-meta-line diary-entry-polaroid-meta"></div>
+              <div class="diary-entry-polaroid-meta-line diary-entry-polaroid-summary"></div>
+            </div>
+          </div>
+        </div>
         <div class="writing-area"></div>
       </div>
     `;
 
+    const innerPage = wrapper.querySelector('.notebook-inner-page');
     const writingArea = wrapper.querySelector('.writing-area');
     const lines = [];
 
@@ -50,8 +65,16 @@ window.ButterflyDiaryPageFactory = {
     const page = {
       pageNumber,
       wrapper,
+      innerPage,
       writingArea,
       lines,
+      entryInfoPanel: wrapper.querySelector('.diary-entry-info-panel'),
+      entryInfoLine: wrapper.querySelector('.diary-entry-info-line'),
+      entryIllustrationPanel: wrapper.querySelector('.diary-entry-illustration-panel'),
+      entryIllustrationScreen: wrapper.querySelector('.diary-entry-polaroid-screen'),
+      entryIllustrationScreenText: wrapper.querySelector('.diary-entry-polaroid-screen-text'),
+      entryIllustrationMeta: wrapper.querySelector('.diary-entry-polaroid-meta'),
+      entryIllustrationSummary: wrapper.querySelector('.diary-entry-polaroid-summary'),
       nextHotspot: wrapper.querySelector('.turn-page-hotspot'),
       prevHotspot: wrapper.querySelector('.turn-back-hotspot'),
       menuTrigger: wrapper.querySelector('.menu-trigger-hotspot'),
